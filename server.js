@@ -20,9 +20,26 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-const supabase = createClient(
+const supabaseAdmin = createClient(
   SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY
+  SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
+
+const supabaseAuth = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
 );
 
 const publicDir = path.join(__dirname, "public");
@@ -80,7 +97,7 @@ async function getUser(req) {
   }
 
   const { data, error } =
-    await supabase.auth.getUser(token);
+    await supabaseAdmin.auth.getUser(token);
 
   if (error || !data || !data.user) {
     return null;
@@ -119,7 +136,7 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     const { data, error } =
-      await supabase.auth.admin.createUser({
+      await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true
@@ -135,7 +152,7 @@ app.post("/api/auth/register", async (req, res) => {
     const user = data.user;
 
     const { error: profileError } =
-      await supabase
+      await supabaseAdmin
         .from("profiles")
         .insert({
           id: user.id,
@@ -143,7 +160,7 @@ app.post("/api/auth/register", async (req, res) => {
         });
 
     if (profileError) {
-      await supabase.auth.admin.deleteUser(user.id);
+      await supabaseAdmin.auth.admin.deleteUser(user.id);
 
       return res.status(400).json({
         success: false,
@@ -152,7 +169,7 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     const { error: channelError } =
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .insert({
           user_id: user.id,
@@ -161,7 +178,7 @@ app.post("/api/auth/register", async (req, res) => {
         });
 
     if (channelError) {
-      await supabase.auth.admin.deleteUser(user.id);
+      await supabaseAdmin.auth.admin.deleteUser(user.id);
 
       return res.status(400).json({
         success: false,
@@ -170,7 +187,7 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     const { data: loginData, error: loginError } =
-      await supabase.auth.signInWithPassword({
+      await supabaseAuth.auth.signInWithPassword({
         email,
         password
       });
@@ -218,7 +235,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const { data, error } =
-      await supabase.auth.signInWithPassword({
+      await supabaseAuth.auth.signInWithPassword({
         email,
         password
       });
@@ -233,14 +250,14 @@ app.post("/api/auth/login", async (req, res) => {
     const user = data.user;
 
     const { data: profile } =
-      await supabase
+      await supabaseAdmin
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
     const { data: channel } =
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .select("*")
         .eq("user_id", user.id)
@@ -281,14 +298,14 @@ app.get("/api/me", async (req, res) => {
     }
 
     const { data: profile } =
-      await supabase
+      await supabaseAdmin
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
 
     const { data: channel } =
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .select("*")
         .eq("user_id", user.id)
@@ -318,7 +335,7 @@ app.get("/api/videos", async (req, res) => {
   try {
     const type = req.query.type;
 
-    let query = supabase
+    let query = supabaseAdmin
       .from("videos")
       .select(`
         *,
@@ -417,7 +434,7 @@ app.post(
       }
 
       let { data: channel } =
-        await supabase
+        await supabaseAdmin
           .from("channels")
           .select("*")
           .eq("user_id", user.id)
@@ -425,7 +442,7 @@ app.post(
 
       if (!channel) {
         const { data: newChannel, error } =
-          await supabase
+          await supabaseAdmin
             .from("channels")
             .insert({
               user_id: user.id,
@@ -464,7 +481,7 @@ app.post(
         `${user.id}/${Date.now()}-${random}-${safeTitle}${extension}`;
 
       const { error: videoUploadError } =
-        await supabase.storage
+        await supabaseAdmin.storage
           .from("videos")
           .upload(
             videoPath,
@@ -486,7 +503,7 @@ app.post(
       const {
         data: videoPublic
       } =
-        supabase.storage
+        supabaseAdmin.storage
           .from("videos")
           .getPublicUrl(videoPath);
 
@@ -505,7 +522,7 @@ app.post(
         const {
           error: thumbnailUploadError
         } =
-          await supabase.storage
+          await supabaseAdmin.storage
             .from("thumbnails")
             .upload(
               thumbPath,
@@ -527,7 +544,7 @@ app.post(
         const {
           data: thumbPublic
         } =
-          supabase.storage
+          supabaseAdmin.storage
             .from("thumbnails")
             .getPublicUrl(thumbPath);
 
@@ -536,7 +553,7 @@ app.post(
       }
 
       const { data: video, error: insertError } =
-        await supabase
+        await supabaseAdmin
           .from("videos")
           .insert({
             channel_id: channel.id,
@@ -589,7 +606,7 @@ app.post("/api/videos/:id/view", async (req, res) => {
     const id = req.params.id;
 
     const { data: video, error: getError } =
-      await supabase
+      await supabaseAdmin
         .from("videos")
         .select("views")
         .eq("id", id)
@@ -606,7 +623,7 @@ app.post("/api/videos/:id/view", async (req, res) => {
       Number(video.views || 0) + 1;
 
     const { data, error } =
-      await supabase
+      await supabaseAdmin
         .from("videos")
         .update({
           views: newViews
@@ -645,7 +662,7 @@ app.get("/api/channels/:id", async (req, res) => {
     const channelId = req.params.id;
 
     const { data: channel, error } =
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .select("*")
         .eq("id", channelId)
@@ -659,7 +676,7 @@ app.get("/api/channels/:id", async (req, res) => {
     }
 
     const { data: videos } =
-      await supabase
+      await supabaseAdmin
         .from("videos")
         .select("*")
         .eq("channel_id", channelId)
@@ -673,7 +690,7 @@ app.get("/api/channels/:id", async (req, res) => {
 
     if (user) {
       const { data: subscription } =
-        await supabase
+        await supabaseAdmin
           .from("subscriptions")
           .select("subscriber_id")
           .eq("subscriber_id", user.id)
@@ -722,7 +739,7 @@ app.put("/api/channels/:id", async (req, res) => {
     } = req.body;
 
     const { data: channel } =
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .select("user_id")
         .eq("id", channelId)
@@ -748,7 +765,7 @@ app.put("/api/channels/:id", async (req, res) => {
     }
 
     const { data, error } =
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .update(updateData)
         .eq("id", channelId)
@@ -797,7 +814,7 @@ app.post(
       const channelId = req.params.id;
 
       const { error } =
-        await supabase
+        await supabaseAdmin
           .from("subscriptions")
           .upsert({
             subscriber_id: user.id,
@@ -812,7 +829,7 @@ app.post(
       }
 
       const { count } =
-        await supabase
+        await supabaseAdmin
           .from("subscriptions")
           .select("*", {
             count: "exact",
@@ -820,7 +837,7 @@ app.post(
           })
           .eq("channel_id", channelId);
 
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .update({
           subscribers_count:
@@ -865,7 +882,7 @@ app.delete(
       const channelId = req.params.id;
 
       const { error } =
-        await supabase
+        await supabaseAdmin
           .from("subscriptions")
           .delete()
           .eq("subscriber_id", user.id)
@@ -879,7 +896,7 @@ app.delete(
       }
 
       const { count } =
-        await supabase
+        await supabaseAdmin
           .from("subscriptions")
           .select("*", {
             count: "exact",
@@ -887,7 +904,7 @@ app.delete(
           })
           .eq("channel_id", channelId);
 
-      await supabase
+      await supabaseAdmin
         .from("channels")
         .update({
           subscribers_count:
