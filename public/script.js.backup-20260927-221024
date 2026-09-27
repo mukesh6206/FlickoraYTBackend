@@ -1,0 +1,1798 @@
+/* =========================================================
+   FLICKORA YT - BACKEND CONNECTED SCRIPT
+   ========================================================= */
+
+const API_BASE = "";
+
+let allVideos = [];
+let currentVideo = null;
+let currentChannel = null;
+let currentUser = null;
+let currentCategory = "All";
+
+const TOKEN_KEY = "flickoraAccessToken";
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function getToken() {
+    return localStorage.getItem(TOKEN_KEY) || "";
+}
+
+function setToken(token) {
+    if (token) {
+        localStorage.setItem(TOKEN_KEY, token);
+    } else {
+        localStorage.removeItem(TOKEN_KEY);
+    }
+}
+
+function authHeaders(extra = {}) {
+    const token = getToken();
+
+    return {
+        ...extra,
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+}
+
+async function api(url, options = {}) {
+    const response = await fetch(API_BASE + url, {
+        ...options,
+        headers: authHeaders(options.headers || {})
+    });
+
+    let data = {};
+
+    try {
+        data = await response.json();
+    } catch {
+        data = {};
+    }
+
+    if (!response.ok) {
+        throw new Error(data.error || data.message || `Request failed: ${response.status}`);
+    }
+
+    return data;
+}
+
+function escapeHTML(value) {
+    if (value === null || value === undefined) return "";
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function formatViews(number) {
+    number = Number(number || 0);
+
+    if (number >= 1000000000) {
+        return (number / 1000000000).toFixed(1).replace(".0", "") + "B";
+    }
+
+    if (number >= 1000000) {
+        return (number / 1000000).toFixed(1).replace(".0", "") + "M";
+    }
+
+    if (number >= 1000) {
+        return (number / 1000).toFixed(1).replace(".0", "") + "K";
+    }
+
+    return number.toString();
+}
+
+function formatTime(dateString) {
+    if (!dateString) return "";
+
+    const date = new Date(dateString);
+    const now = new Date();
+
+    const seconds = Math.floor((now - date) / 1000);
+
+    if (seconds < 60) return "just now";
+
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < 60) {
+        return `${minutes} min ago`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return `${hours} hr ago`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    if (days < 30) {
+        return `${days} day${days === 1 ? "" : "s"} ago`;
+    }
+
+    const months = Math.floor(days / 30);
+
+    if (months < 12) {
+        return `${months} month${months === 1 ? "" : "s"} ago`;
+    }
+
+    const years = Math.floor(months / 12);
+
+    return `${years} year${years === 1 ? "" : "s"} ago`;
+}
+
+function getChannelName(video) {
+    return (
+        video.channel_name ||
+        video.channelName ||
+        video.channel?.name ||
+        "Flickora Creator"
+    );
+}
+
+function getChannelAvatar(video) {
+    return (
+        video.channel_avatar ||
+        video.channelAvatar ||
+        video.channel?.avatar_url ||
+        ""
+    );
+}
+
+function getVideoThumbnail(video) {
+    return (
+        video.thumbnail_url ||
+        video.thumbnailUrl ||
+        ""
+    );
+}
+
+function getVideoUrl(video) {
+    return (
+        video.video_url ||
+        video.videoUrl ||
+        ""
+    );
+}
+
+function getVideoType(video) {
+    return String(video.type || "video").toLowerCase();
+}
+
+/* =========================================================
+   INITIAL LOAD
+   ========================================================= */
+
+document.addEventListener("DOMContentLoaded", async () => {
+    console.log("Flickora frontend starting...");
+
+    setupUploadForm();
+    setupCreateMenu();
+    setupSearch();
+
+    await loadCurrentUser();
+    await loadVideos();
+
+    updateBottomAvatar();
+
+    console.log("Flickora frontend ready.");
+});
+
+
+/* =========================================================
+   CURRENT USER
+   ========================================================= */
+
+async function loadCurrentUser() {
+    const token = getToken();
+
+    if (!token) {
+        currentUser = null;
+        currentChannel = null;
+        updateAccountUI();
+        return;
+    }
+
+    try {
+        const data = await api("/api/me");
+
+        currentUser = data.user || null;
+        currentChannel = data.channel || null;
+
+        updateAccountUI();
+    } catch (error) {
+        console.log("Session expired:", error.message);
+
+        setToken("");
+
+        currentUser = null;
+        currentChannel = null;
+
+        updateAccountUI();
+    }
+}
+
+
+/* =========================================================
+   LOAD VIDEOS
+   ========================================================= */
+
+async function loadVideos() {
+    try {
+        const data = await api("/api/videos");
+
+        allVideos = Array.isArray(data)
+            ? data
+            : data.videos || [];
+
+        renderHomeVideos();
+        renderShorts();
+
+    } catch (error) {
+        console.error("Video loading failed:", error);
+
+        const videoList = document.getElementById("videoList");
+
+        if (videoList) {
+            videoList.innerHTML = `
+                <div style="padding:30px;text-align:center;">
+                    <h3>Unable to load videos</h3>
+                    <p>${escapeHTML(error.message)}</p>
+                </div>
+            `;
+        }
+    }
+}
+
+
+/* =========================================================
+   HOME VIDEOS
+   ========================================================= */
+
+function renderHomeVideos() {
+    const container = document.getElementById("videoList");
+
+    if (!container) return;
+
+    let videos = allVideos.filter(video => {
+        return getVideoType(video) !== "short";
+    });
+
+    if (currentCategory && currentCategory !== "All") {
+        videos = videos.filter(video => {
+            const hashtags = String(video.hashtags || "").toLowerCase();
+
+            const title = String(video.title || "").toLowerCase();
+
+            return (
+                hashtags.includes(currentCategory.toLowerCase()) ||
+                title.includes(currentCategory.toLowerCase())
+            );
+        });
+    }
+
+    if (!videos.length) {
+        container.innerHTML = `
+            <div style="padding:35px;text-align:center;">
+                <h3>No videos yet</h3>
+                <p>Upload the first video to Flickora.</p>
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML = videos.map(createVideoCard).join("");
+}
+
+
+/* =========================================================
+   VIDEO CARD
+   ========================================================= */
+
+function createVideoCard(video) {
+    const thumbnail = getVideoThumbnail(video);
+
+    const title = escapeHTML(video.title || "Untitled video");
+
+    const channel = escapeHTML(getChannelName(video));
+
+    const views = formatViews(video.views);
+
+    const time = formatTime(video.created_at);
+
+    const avatar = getChannelAvatar(video);
+
+    const avatarHTML = avatar
+        ? `<img src="${escapeHTML(avatar)}" alt="">`
+        : `<div class="default-avatar">${escapeHTML(channel.charAt(0).toUpperCase())}</div>`;
+
+    return `
+        <article class="videoCard"
+            data-video-id="${escapeHTML(video.id)}"
+            onclick="openVideo('${escapeHTML(video.id)}')">
+
+            <div class="thumbnailWrap">
+
+                ${
+                    thumbnail
+                        ? `<img
+                            class="videoThumbnail"
+                            src="${escapeHTML(thumbnail)}"
+                            alt="${title}"
+                            loading="lazy"
+                        >`
+                        : `
+                            <div class="videoThumbnail noThumbnail">
+                                <span>Flickora</span>
+                            </div>
+                        `
+                }
+
+            </div>
+
+            <div class="videoInfo">
+
+                <div class="videoAvatar">
+                    ${avatarHTML}
+                </div>
+
+                <div class="videoText">
+
+                    <h3>${title}</h3>
+
+                    <div class="videoChannel">
+                        ${channel}
+                    </div>
+
+                    <div class="videoMeta">
+                        ${formatViews(video.views)} views
+                        •
+                        ${time}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </article>
+    `;
+}
+
+
+/* =========================================================
+   SHORTS
+   ========================================================= */
+
+function renderShorts() {
+    const container = document.getElementById("shortList");
+
+    if (!container) return;
+
+    const shorts = allVideos.filter(video => {
+        return getVideoType(video) === "short";
+    });
+
+    if (!shorts.length) {
+        container.innerHTML = `
+            <div style="padding:35px;text-align:center;color:white;">
+                <h3>No Shorts yet</h3>
+                <p>Upload your first Short.</p>
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML = shorts.map(video => {
+
+        const thumbnail = getVideoThumbnail(video);
+
+        const title = escapeHTML(video.title || "Untitled Short");
+
+        return `
+            <article
+                class="shortCard"
+                onclick="openVideo('${escapeHTML(video.id)}')"
+            >
+
+                ${
+                    thumbnail
+                        ? `
+                            <img
+                                src="${escapeHTML(thumbnail)}"
+                                alt="${title}"
+                                loading="lazy"
+                            >
+                        `
+                        : `
+                            <div class="shortThumbnail">
+                                Flickora
+                            </div>
+                        `
+                }
+
+                <div class="shortInfo">
+                    <h3>${title}</h3>
+                    <span>${formatViews(video.views)} views</span>
+                </div>
+
+            </article>
+        `;
+
+    }).join("");
+}
+
+
+/* =========================================================
+   OPEN VIDEO
+   ========================================================= */
+
+async function openVideo(videoId) {
+    const video = allVideos.find(item => String(item.id) === String(videoId));
+
+    if (!video) {
+        console.log("Video not found:", videoId);
+        return;
+    }
+
+    currentVideo = video;
+
+    const overlay = document.getElementById("playerOverlay");
+
+    const player = document.getElementById("playerVideo");
+
+    if (!overlay || !player) {
+        console.log("Player elements not found.");
+        return;
+    }
+
+    const videoUrl = getVideoUrl(video);
+
+    if (!videoUrl) {
+        alert("Video file not available.");
+        return;
+    }
+
+    player.src = videoUrl;
+
+    player.load();
+
+    overlay.classList.remove("miniMode");
+
+    overlay.style.display = "flex";
+
+    updatePlayerUI(video);
+
+    try {
+        await api(`/api/videos/${encodeURIComponent(video.id)}/view`);
+
+        video.views = Number(video.views || 0) + 1;
+
+        updatePlayerViewCount(video);
+
+        renderHomeVideos();
+        renderShorts();
+
+    } catch (error) {
+        console.log("View update failed:", error.message);
+    }
+
+    try {
+        await player.play();
+    } catch {
+        // Browser may block autoplay.
+    }
+
+    renderRecommended(video.id);
+}
+
+
+/* =========================================================
+   PLAYER UI
+   ========================================================= */
+
+function updatePlayerUI(video) {
+    const title = document.getElementById("playerTitle");
+
+    const channelName = document.getElementById("playerChannelName");
+
+    const avatar = document.getElementById("playerAvatar");
+
+    const description = document.getElementById("playerDescription");
+
+    const hashtags = document.getElementById("playerHashtags");
+
+    if (title) {
+        title.textContent = video.title || "Untitled video";
+    }
+
+    if (channelName) {
+        channelName.textContent = getChannelName(video);
+    }
+
+    if (avatar) {
+        const avatarUrl = getChannelAvatar(video);
+
+        if (avatarUrl) {
+            avatar.src = avatarUrl;
+            avatar.style.display = "block";
+        } else {
+            avatar.removeAttribute("src");
+            avatar.style.display = "none";
+        }
+    }
+
+    if (description) {
+        description.textContent = video.description || "";
+    }
+
+    if (hashtags) {
+        hashtags.textContent = video.hashtags || "";
+    }
+
+    updatePlayerViewCount(video);
+
+    updateSubscribeButton(video);
+}
+
+
+function updatePlayerViewCount(video) {
+    const elements = document.querySelectorAll(
+        ".playerViews, #playerViews, [data-player-views]"
+    );
+
+    elements.forEach(element => {
+        element.textContent = `${formatViews(video.views)} views`;
+    });
+}
+
+
+/* =========================================================
+   CLOSE PLAYER
+   ========================================================= */
+
+function closePlayer() {
+    const overlay = document.getElementById("playerOverlay");
+
+    const player = document.getElementById("playerVideo");
+
+    if (player) {
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+    }
+
+    if (overlay) {
+        overlay.style.display = "none";
+        overlay.classList.remove("miniMode");
+    }
+
+    currentVideo = null;
+}
+
+
+/* =========================================================
+   MINI PLAYER
+   ========================================================= */
+
+function minimizePlayer() {
+    const overlay = document.getElementById("playerOverlay");
+
+    if (!overlay) return;
+
+    overlay.classList.add("miniMode");
+}
+
+
+function restorePlayer() {
+    const overlay = document.getElementById("playerOverlay");
+
+    if (!overlay) return;
+
+    overlay.classList.remove("miniMode");
+}
+
+
+/* =========================================================
+   RECOMMENDED
+   ========================================================= */
+
+function renderRecommended(currentId) {
+    const container = document.getElementById("recommendedList");
+
+    if (!container) return;
+
+    const recommended = allVideos
+        .filter(video => String(video.id) !== String(currentId))
+        .slice(0, 10);
+
+    if (!recommended.length) {
+        container.innerHTML = "";
+        return;
+    }
+
+    container.innerHTML = recommended.map(video => {
+
+        const thumbnail = getVideoThumbnail(video);
+
+        return `
+            <div
+                class="recommendedCard"
+                onclick="openVideo('${escapeHTML(video.id)}')"
+            >
+
+                ${
+                    thumbnail
+                        ? `
+                            <img
+                                src="${escapeHTML(thumbnail)}"
+                                alt="${escapeHTML(video.title || "")}"
+                            >
+                        `
+                        : `
+                            <div class="recommendedThumb">
+                                Flickora
+                            </div>
+                        `
+                }
+
+                <div class="recommendedInfo">
+
+                    <h4>
+                        ${escapeHTML(video.title || "Untitled video")}
+                    </h4>
+
+                    <p>
+                        ${escapeHTML(getChannelName(video))}
+                    </p>
+
+                    <small>
+                        ${formatViews(video.views)} views
+                        •
+                        ${formatTime(video.created_at)}
+                    </small>
+
+                </div>
+
+            </div>
+        `;
+
+    }).join("");
+}
+
+
+/* =========================================================
+   SUBSCRIBE
+   ========================================================= */
+
+async function toggleSubscribe() {
+    if (!currentUser) {
+        openChannel();
+
+        setTimeout(() => {
+            showLoginForm();
+        }, 100);
+
+        return;
+    }
+
+    if (!currentVideo) return;
+
+    const channelId =
+        currentVideo.channel_id ||
+        currentVideo.channelId ||
+        currentVideo.channel?.id;
+
+    if (!channelId) {
+        alert("Channel information not available.");
+        return;
+    }
+
+    const button = document.getElementById("subscribeButton");
+
+    if (!button) return;
+
+    const isSubscribed =
+        button.classList.contains("subscribed") ||
+        button.dataset.subscribed === "true";
+
+    try {
+
+        if (isSubscribed) {
+
+            await api(
+                `/api/channels/${encodeURIComponent(channelId)}/subscribe`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+        } else {
+
+            await api(
+                `/api/channels/${encodeURIComponent(channelId)}/subscribe`,
+                {
+                    method: "POST"
+                }
+            );
+
+        }
+
+        await updateSubscribeButton(currentVideo);
+
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+
+async function updateSubscribeButton(video) {
+    const button = document.getElementById("subscribeButton");
+
+    if (!button) return;
+
+    if (!currentUser) {
+        button.textContent = "Subscribe";
+        button.classList.remove("subscribed");
+        button.dataset.subscribed = "false";
+        return;
+    }
+
+    const channelId =
+        video.channel_id ||
+        video.channelId ||
+        video.channel?.id;
+
+    if (!channelId) return;
+
+    try {
+
+        const data = await api(
+            `/api/channels/${encodeURIComponent(channelId)}`
+        );
+
+        const subscribed = Boolean(data.subscribed);
+
+        button.dataset.subscribed = subscribed ? "true" : "false";
+
+        button.classList.toggle("subscribed", subscribed);
+
+        button.textContent = subscribed
+            ? "Subscribed"
+            : "Subscribe";
+
+    } catch (error) {
+        console.log("Subscribe status:", error.message);
+    }
+}
+
+
+/* =========================================================
+   UPLOAD
+   ========================================================= */
+
+function setupUploadForm() {
+    const form = document.getElementById("uploadForm");
+
+    if (!form) return;
+
+    form.addEventListener("submit", uploadVideo);
+}
+
+
+async function uploadVideo(event) {
+    event.preventDefault();
+
+    if (!currentUser) {
+        alert("Please login first.");
+        openChannel();
+        return;
+    }
+
+    const title = document.getElementById("title");
+
+    const description = document.getElementById("description");
+
+    const hashtags = document.getElementById("hashtags");
+
+    const videoFile = document.getElementById("videoFile");
+
+    const thumbnailFile = document.getElementById("thumbnailFile");
+
+    const typeInput = document.getElementById("type");
+
+    const status = document.getElementById("status");
+
+    if (!videoFile || !videoFile.files.length) {
+        alert("Please select a video.");
+        return;
+    }
+
+    const type =
+        typeInput?.value ||
+        "video";
+
+    const formData = new FormData();
+
+    formData.append(
+        "title",
+        title?.value?.trim() || "Untitled video"
+    );
+
+    formData.append(
+        "description",
+        description?.value?.trim() || ""
+    );
+
+    formData.append(
+        "hashtags",
+        hashtags?.value?.trim() || ""
+    );
+
+    formData.append(
+        "type",
+        type
+    );
+
+    formData.append(
+        "video",
+        videoFile.files[0]
+    );
+
+    if (thumbnailFile && thumbnailFile.files.length) {
+        formData.append(
+            "thumbnail",
+            thumbnailFile.files[0]
+        );
+    }
+
+    if (status) {
+        status.textContent = "Uploading...";
+    }
+
+    try {
+
+        const response = await fetch(
+            API_BASE + "/api/videos/upload",
+            {
+                method: "POST",
+                headers: authHeaders(),
+                body: formData
+            }
+        );
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch {
+            data = {};
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                data.message ||
+                "Upload failed"
+            );
+        }
+
+        if (status) {
+            status.textContent = "Upload successful!";
+        }
+
+        alert("Video uploaded successfully!");
+
+        closeUpload();
+
+        form.reset();
+
+        if (typeInput) {
+            typeInput.value = "video";
+        }
+
+        await loadVideos();
+
+    } catch (error) {
+
+        console.error("Upload error:", error);
+
+        if (status) {
+            status.textContent = error.message;
+        }
+
+        alert("Upload failed: " + error.message);
+    }
+}
+
+
+/* =========================================================
+   UPLOAD UI
+   ========================================================= */
+
+function openUpload(type = "video") {
+    const overlay = document.getElementById("uploadOverlay");
+
+    if (!overlay) return;
+
+    if (!currentUser) {
+        openChannel();
+
+        setTimeout(() => {
+            showLoginForm();
+        }, 100);
+
+        return;
+    }
+
+    const typeInput = document.getElementById("type");
+
+    if (typeInput) {
+        typeInput.value = type;
+    }
+
+    overlay.style.display = "flex";
+}
+
+
+function closeUpload() {
+    const overlay = document.getElementById("uploadOverlay");
+
+    if (overlay) {
+        overlay.style.display = "none";
+    }
+}
+
+
+/* =========================================================
+   CREATE MENU
+   ========================================================= */
+
+function setupCreateMenu() {
+    const plusButton = document.querySelector(
+        '[onclick="openUpload()"]'
+    );
+
+    if (!plusButton) return;
+
+    plusButton.addEventListener("click", function(event) {
+        event.preventDefault();
+
+        openUpload("video");
+    });
+}
+
+
+function openCreateMenu() {
+    openUpload("video");
+}
+
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+function showHome() {
+    const home = document.getElementById("homePage");
+
+    const shorts = document.getElementById("shortsPage");
+
+    if (home) home.style.display = "";
+
+    if (shorts) shorts.style.display = "none";
+
+    renderHomeVideos();
+}
+
+
+function showShorts() {
+    const home = document.getElementById("homePage");
+
+    const shorts = document.getElementById("shortsPage");
+
+    if (home) home.style.display = "none";
+
+    if (shorts) shorts.style.display = "";
+
+    renderShorts();
+}
+
+
+function showSubscriptions() {
+    if (!currentUser) {
+        openChannel();
+
+        setTimeout(() => {
+            showLoginForm();
+        }, 100);
+
+        return;
+    }
+
+    alert("Subscriptions page will use your saved subscriptions.");
+}
+
+
+/* =========================================================
+   CATEGORY
+   ========================================================= */
+
+function selectCategory(category) {
+    currentCategory = category;
+
+    document.querySelectorAll(".category").forEach(button => {
+        button.classList.remove("active");
+    });
+
+    const buttons = document.querySelectorAll(".category");
+
+    buttons.forEach(button => {
+        if (
+            button.textContent.trim().toLowerCase() ===
+            String(category).toLowerCase()
+        ) {
+            button.classList.add("active");
+        }
+    });
+
+    renderHomeVideos();
+}
+
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+function setupSearch() {
+    const input =
+        document.getElementById("searchInput") ||
+        document.querySelector('input[type="search"]');
+
+    if (!input) return;
+
+    input.addEventListener("input", function() {
+
+        const query = this.value.trim().toLowerCase();
+
+        const container = document.getElementById("videoList");
+
+        if (!container) return;
+
+        if (!query) {
+            renderHomeVideos();
+            return;
+        }
+
+        const results = allVideos.filter(video => {
+
+            const title =
+                String(video.title || "").toLowerCase();
+
+            const description =
+                String(video.description || "").toLowerCase();
+
+            const hashtags =
+                String(video.hashtags || "").toLowerCase();
+
+            const channel =
+                getChannelName(video).toLowerCase();
+
+            return (
+                title.includes(query) ||
+                description.includes(query) ||
+                hashtags.includes(query) ||
+                channel.includes(query)
+            );
+        });
+
+        if (!results.length) {
+            container.innerHTML = `
+                <div style="padding:35px;text-align:center;">
+                    <h3>No results found</h3>
+                    <p>Try another search.</p>
+                </div>
+            `;
+
+            return;
+        }
+
+        container.innerHTML =
+            results
+                .filter(video => getVideoType(video) !== "short")
+                .map(createVideoCard)
+                .join("");
+    });
+}
+
+
+/* =========================================================
+   CHANNEL
+   ========================================================= */
+
+function openChannel() {
+    const overlay = document.getElementById("channelOverlay");
+
+    if (!overlay) return;
+
+    overlay.style.display = "flex";
+
+    renderChannelUI();
+}
+
+
+function closeChannel() {
+    const overlay = document.getElementById("channelOverlay");
+
+    if (overlay) {
+        overlay.style.display = "none";
+    }
+}
+
+
+function renderChannelUI() {
+    const overlay = document.getElementById("channelOverlay");
+
+    if (!overlay) return;
+
+    if (!currentUser) {
+        renderLoggedOutChannel();
+    } else {
+        renderLoggedInChannel();
+    }
+}
+
+
+function renderLoggedOutChannel() {
+    const content =
+        document.querySelector("#channelOverlay .channelContent") ||
+        document.querySelector("#channelOverlay .channelBody") ||
+        document.getElementById("channelContent");
+
+    if (!content) {
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="authBox">
+
+            <h2>Welcome to Flickora</h2>
+
+            <p>Login or create your Flickora account.</p>
+
+            <div id="authForms">
+
+                <form id="loginForm">
+
+                    <input
+                        id="loginEmail"
+                        type="email"
+                        placeholder="Email"
+                        required
+                    >
+
+                    <input
+                        id="loginPassword"
+                        type="password"
+                        placeholder="Password"
+                        required
+                    >
+
+                    <button type="submit">
+                        Login
+                    </button>
+
+                </form>
+
+                <button
+                    type="button"
+                    onclick="showRegisterForm()"
+                >
+                    Create account
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+    const form = document.getElementById("loginForm");
+
+    if (form) {
+        form.addEventListener("submit", loginUser);
+    }
+}
+
+
+function renderLoggedInChannel() {
+    const content =
+        document.querySelector("#channelOverlay .channelContent") ||
+        document.querySelector("#channelOverlay .channelBody") ||
+        document.getElementById("channelContent");
+
+    if (!content) {
+        return;
+    }
+
+    const channel = currentChannel || {};
+
+    content.innerHTML = `
+        <div class="channelProfile">
+
+            <div class="channelAvatar">
+                ${
+                    channel.avatar_url
+                        ? `<img src="${escapeHTML(channel.avatar_url)}">`
+                        : escapeHTML(
+                            (channel.name || "F")
+                                .charAt(0)
+                                .toUpperCase()
+                        )
+                }
+            </div>
+
+            <h2>
+                ${escapeHTML(channel.name || "Flickora Creator")}
+            </h2>
+
+            <p>
+                ${escapeHTML(channel.description || "")}
+            </p>
+
+            <p>
+                ${formatViews(channel.subscribers_count || 0)}
+                subscribers
+            </p>
+
+            <button onclick="logoutUser()">
+                Logout
+            </button>
+
+            <button onclick="editChannel()">
+                Edit channel
+            </button>
+
+        </div>
+    `;
+}
+
+
+function showLoginForm() {
+    renderLoggedOutChannel();
+}
+
+
+function showRegisterForm() {
+    const content =
+        document.querySelector("#channelOverlay .channelContent") ||
+        document.querySelector("#channelOverlay .channelBody") ||
+        document.getElementById("channelContent");
+
+    if (!content) return;
+
+    content.innerHTML = `
+        <div class="authBox">
+
+            <h2>Create Flickora account</h2>
+
+            <form id="registerForm">
+
+                <input
+                    id="registerUsername"
+                    type="text"
+                    placeholder="Username"
+                    required
+                >
+
+                <input
+                    id="registerEmail"
+                    type="email"
+                    placeholder="Email"
+                    required
+                >
+
+                <input
+                    id="registerPassword"
+                    type="password"
+                    placeholder="Password"
+                    minlength="6"
+                    required
+                >
+
+                <button type="submit">
+                    Create account
+                </button>
+
+            </form>
+
+            <button
+                type="button"
+                onclick="showLoginForm()"
+            >
+                Back to login
+            </button>
+
+        </div>
+    `;
+
+    const form = document.getElementById("registerForm");
+
+    if (form) {
+        form.addEventListener("submit", registerUser);
+    }
+}
+
+
+/* =========================================================
+   REGISTER
+   ========================================================= */
+
+async function registerUser(event) {
+    event.preventDefault();
+
+    const username =
+        document.getElementById("registerUsername")
+            ?.value
+            ?.trim();
+
+    const email =
+        document.getElementById("registerEmail")
+            ?.value
+            ?.trim();
+
+    const password =
+        document.getElementById("registerPassword")
+            ?.value;
+
+    if (!username || !email || !password) {
+        alert("Please fill all fields.");
+        return;
+    }
+
+    try {
+
+        const data = await api(
+            "/api/auth/register",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    username,
+                    email,
+                    password
+                })
+            }
+        );
+
+        if (data.session?.access_token) {
+            setToken(data.session.access_token);
+        }
+
+        await loadCurrentUser();
+
+        if (!currentUser) {
+            alert(
+                "Account created. Please login if email confirmation is required."
+            );
+
+            showLoginForm();
+
+            return;
+        }
+
+        alert("Account created successfully!");
+
+        renderChannelUI();
+
+    } catch (error) {
+
+        alert("Registration failed: " + error.message);
+    }
+}
+
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
+async function loginUser(event) {
+    event.preventDefault();
+
+    const email =
+        document.getElementById("loginEmail")
+            ?.value
+            ?.trim();
+
+    const password =
+        document.getElementById("loginPassword")
+            ?.value;
+
+    if (!email || !password) {
+        alert("Enter email and password.");
+        return;
+    }
+
+    try {
+
+        const data = await api(
+            "/api/auth/login",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    email,
+                    password
+                })
+            }
+        );
+
+        if (!data.session?.access_token) {
+            throw new Error("Login token was not returned.");
+        }
+
+        setToken(data.session.access_token);
+
+        await loadCurrentUser();
+
+        alert("Login successful!");
+
+        renderChannelUI();
+
+        updateBottomAvatar();
+
+    } catch (error) {
+
+        alert("Login failed: " + error.message);
+    }
+}
+
+
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
+function logoutUser() {
+    setToken("");
+
+    currentUser = null;
+
+    currentChannel = null;
+
+    updateAccountUI();
+
+    updateBottomAvatar();
+
+    renderChannelUI();
+
+    closeChannel();
+
+    alert("Logged out.");
+}
+
+
+/* =========================================================
+   EDIT CHANNEL
+   ========================================================= */
+
+function editChannel() {
+    if (!currentChannel) return;
+
+    const content =
+        document.querySelector("#channelOverlay .channelContent") ||
+        document.querySelector("#channelOverlay .channelBody") ||
+        document.getElementById("channelContent");
+
+    if (!content) return;
+
+    content.innerHTML = `
+        <div class="channelEdit">
+
+            <h2>Edit channel</h2>
+
+            <input
+                id="editChannelName"
+                type="text"
+                value="${escapeHTML(currentChannel.name || "")}"
+                placeholder="Channel name"
+            >
+
+            <textarea
+                id="editChannelDescription"
+                placeholder="Channel description"
+            >${escapeHTML(currentChannel.description || "")}</textarea>
+
+            <button onclick="saveChannel()">
+                Save changes
+            </button>
+
+            <button onclick="renderChannelUI()">
+                Cancel
+            </button>
+
+        </div>
+    `;
+}
+
+
+async function saveChannel() {
+    if (!currentChannel) return;
+
+    const name =
+        document.getElementById("editChannelName")
+            ?.value
+            ?.trim();
+
+    const description =
+        document.getElementById("editChannelDescription")
+            ?.value
+            ?.trim();
+
+    if (!name) {
+        alert("Channel name required.");
+        return;
+    }
+
+    try {
+
+        const data = await api(
+            `/api/channels/${encodeURIComponent(currentChannel.id)}`,
+            {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name,
+                    description
+                })
+            }
+        );
+
+        currentChannel =
+            data.channel ||
+            data;
+
+        alert("Channel updated.");
+
+        renderChannelUI();
+
+        await loadVideos();
+
+    } catch (error) {
+
+        alert("Channel update failed: " + error.message);
+    }
+}
+
+
+/* =========================================================
+   ACCOUNT UI
+   ========================================================= */
+
+function updateAccountUI() {
+    const accountButton =
+        document.getElementById("userAccountBtn");
+
+    if (accountButton) {
+        accountButton.title =
+            currentUser
+                ? `Logged in as ${currentUser.email || ""}`
+                : "Login";
+    }
+}
+
+
+function updateBottomAvatar() {
+    const avatar =
+        document.getElementById("bottomAvatar");
+
+    if (!avatar) return;
+
+    if (currentChannel?.avatar_url) {
+        avatar.src = currentChannel.avatar_url;
+    } else {
+        avatar.removeAttribute("src");
+    }
+}
+
+
+/* =========================================================
+   PLAYER ACTIONS
+   ========================================================= */
+
+function likeVideo() {
+    if (!currentUser) {
+        alert("Login to like videos.");
+        return;
+    }
+
+    alert("Like feature is ready for backend integration.");
+}
+
+
+function dislikeVideo() {
+    if (!currentUser) {
+        alert("Login to dislike videos.");
+        return;
+    }
+
+    alert("Dislike feature is ready for backend integration.");
+}
+
+
+function shareVideo() {
+    if (!currentVideo) return;
+
+    const url =
+        window.location.origin +
+        window.location.pathname +
+        `?video=${encodeURIComponent(currentVideo.id)}`;
+
+    if (navigator.share) {
+
+        navigator.share({
+            title: currentVideo.title || "Flickora",
+            text: "Watch this on Flickora",
+            url
+        }).catch(() => {});
+
+    } else {
+
+        navigator.clipboard
+            ?.writeText(url)
+            .then(() => {
+                alert("Video link copied!");
+            })
+            .catch(() => {
+                prompt("Copy this link:", url);
+            });
+    }
+}
+
+
+function saveVideo() {
+    if (!currentUser) {
+        alert("Login to save videos.");
+        return;
+    }
+
+    alert("Save feature will use your account.");
+}
+
+
+/* =========================================================
+   DESCRIPTION TOGGLE
+   ========================================================= */
+
+function toggleDescription() {
+    const description =
+        document.getElementById("playerDescription");
+
+    if (!description) return;
+
+    description.classList.toggle("expanded");
+}
+
+
+/* =========================================================
+   WINDOW CLICK
+   ========================================================= */
+
+window.addEventListener("click", function(event) {
+
+    const uploadOverlay =
+        document.getElementById("uploadOverlay");
+
+    const channelOverlay =
+        document.getElementById("channelOverlay");
+
+    if (
+        uploadOverlay &&
+        event.target === uploadOverlay
+    ) {
+        closeUpload();
+    }
+
+    if (
+        channelOverlay &&
+        event.target === channelOverlay
+    ) {
+        closeChannel();
+    }
+
+});
+
+
+/* =========================================================
+   GLOBAL FUNCTIONS
+   ========================================================= */
+
+window.openVideo = openVideo;
+
+window.closePlayer = closePlayer;
+
+window.minimizePlayer = minimizePlayer;
+
+window.restorePlayer = restorePlayer;
+
+window.openUpload = openUpload;
+
+window.closeUpload = closeUpload;
+
+window.openCreateMenu = openCreateMenu;
+
+window.showHome = showHome;
+
+window.showShorts = showShorts;
+
+window.showSubscriptions = showSubscriptions;
+
+window.openChannel = openChannel;
+
+window.closeChannel = closeChannel;
+
+window.toggleSubscribe = toggleSubscribe;
+
+window.likeVideo = likeVideo;
+
+window.dislikeVideo = dislikeVideo;
+
+window.shareVideo = shareVideo;
+
+window.saveVideo = saveVideo;
+
+window.toggleDescription = toggleDescription;
+
+window.selectCategory = selectCategory;
+
+window.logoutUser = logoutUser;
+
+window.editChannel = editChannel;
+
+window.saveChannel = saveChannel;
+
+window.showLoginForm = showLoginForm;
+
+window.showRegisterForm = showRegisterForm;
+
+window.updateAccountUI = updateAccountUI;
+
+window.updateBottomAvatar = updateBottomAvatar;
+
+
+/* =========================================================
+   URL VIDEO OPEN
+   ========================================================= */
+
+function openVideoFromURL() {
+
+    const params =
+        new URLSearchParams(window.location.search);
+
+    const videoId =
+        params.get("video");
+
+    if (!videoId) return;
+
+    setTimeout(() => {
+        openVideo(videoId);
+    }, 800);
+}
+
+openVideoFromURL();
+
+
+console.log("=================================");
+console.log("FLICKORA YT SCRIPT LOADED");
+console.log("Backend mode: ON");
+console.log("IndexedDB: OFF");
+console.log("=================================");

@@ -3,39 +3,32 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { createClient } = require("@supabase/supabase-js");
+const path = require("path");
 const crypto = require("crypto");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("ERROR: Supabase environment variables missing.");
+  console.error("Missing Supabase environment variables");
   process.exit(1);
 }
 
 const supabase = createClient(
   SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
+  SUPABASE_SERVICE_ROLE_KEY
 );
 
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+const publicDir = path.join(__dirname, "public");
 
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const upload = multer({
@@ -45,39 +38,42 @@ const upload = multer({
   }
 });
 
-/* =====================================================
-   BASIC
-===================================================== */
+
+/* =========================
+   WEBSITE
+========================= */
+
+app.use(express.static(publicDir));
 
 app.get("/", (req, res) => {
-  res.json({
-    name: "Flickora YT",
-    status: "Backend is running",
-    version: "2.0.0"
-  });
+  res.sendFile(path.join(publicDir, "index.html"));
 });
+
+
+/* =========================
+   HEALTH
+========================= */
 
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
-    message: "Flickora YT backend online",
-    database: "Supabase"
+    message: "Flickora YT backend online"
   });
 });
 
-/* =====================================================
+
+/* =========================
    AUTH HELPER
-===================================================== */
+========================= */
 
 async function getUser(req) {
+  const auth = req.headers.authorization || "";
 
-  const header = req.headers.authorization || "";
-
-  if (!header.startsWith("Bearer ")) {
+  if (!auth.startsWith("Bearer ")) {
     return null;
   }
 
-  const token = header.substring(7).trim();
+  const token = auth.slice(7).trim();
 
   if (!token) {
     return null;
@@ -93,190 +89,132 @@ async function getUser(req) {
   return data.user;
 }
 
-async function requireUser(req, res) {
 
-  const user = await getUser(req);
-
-  if (!user) {
-
-    res.status(401).json({
-      success: false,
-      message: "Login required"
-    });
-
-    return null;
-  }
-
-  return user;
-}
-
-/* =====================================================
+/* =========================
    REGISTER
-===================================================== */
+========================= */
 
 app.post("/api/auth/register", async (req, res) => {
-
   try {
-
-    const email =
-      String(req.body.email || "")
-        .trim()
-        .toLowerCase();
-
-    const password =
-      String(req.body.password || "");
-
-    const username =
-      String(req.body.username || "")
-        .trim();
-
-    const channelName =
-      String(
-        req.body.channelName ||
-        username ||
-        "Flickora Creator"
-      ).trim();
+    const {
+      email,
+      password,
+      username
+    } = req.body;
 
     if (!email || !password || !username) {
-
       return res.status(400).json({
         success: false,
-        message: "Email, password आणि username आवश्यक आहेत."
+        message: "Email, password and username are required"
       });
-
     }
 
-    if (password.length < 6) {
+    const cleanUsername = String(username).trim();
 
+    if (cleanUsername.length < 3) {
       return res.status(400).json({
         success: false,
-        message: "Password किमान 6 characters असावा."
+        message: "Username must be at least 3 characters"
       });
-
     }
 
     const { data, error } =
-      await supabase.auth.signUp({
+      await supabase.auth.admin.createUser({
         email,
-        password
+        password,
+        email_confirm: true
       });
 
     if (error) {
-
       return res.status(400).json({
         success: false,
         message: error.message
       });
-
     }
 
-    if (!data.user) {
-
-      return res.status(400).json({
-        success: false,
-        message: "Account तयार झाला नाही."
-      });
-
-    }
-
-    const userId = data.user.id;
+    const user = data.user;
 
     const { error: profileError } =
       await supabase
         .from("profiles")
         .insert({
-          id: userId,
-          username
+          id: user.id,
+          username: cleanUsername
         });
 
     if (profileError) {
+      await supabase.auth.admin.deleteUser(user.id);
 
       return res.status(400).json({
         success: false,
-        message:
-          "Profile तयार करता आला नाही: " +
-          profileError.message
+        message: profileError.message
       });
-
     }
 
-    const { data: channel, error: channelError } =
+    const { error: channelError } =
       await supabase
         .from("channels")
         .insert({
-          user_id: userId,
-          name: channelName,
-          description: "",
-          subscribers_count: 0
-        })
-        .select()
-        .single();
+          user_id: user.id,
+          name: cleanUsername,
+          description: ""
+        });
 
     if (channelError) {
+      await supabase.auth.admin.deleteUser(user.id);
 
       return res.status(400).json({
         success: false,
-        message:
-          "Channel तयार करता आला नाही: " +
-          channelError.message
+        message: channelError.message
       });
-
     }
 
-    res.json({
+    const { data: loginData, error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+    if (loginError) {
+      return res.json({
+        success: true,
+        message: "Account created. Please login."
+      });
+    }
+
+    return res.json({
       success: true,
-      message:
-        data.session
-          ? "Account successfully created."
-          : "Account created. Email confirmation आवश्यक असल्यास email तपासा.",
-      user: {
-        id: userId,
-        email: email
-      },
-      profile: {
-        username
-      },
-      channel,
-      session: data.session || null
+      user: user,
+      session: loginData.session
     });
 
-  }
-  catch (error) {
-
-    console.error("REGISTER ERROR:", error);
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
 
     res.status(500).json({
       success: false,
-      message: "Registration failed."
+      message: "Registration failed"
     });
-
   }
-
 });
 
-/* =====================================================
+
+/* =========================
    LOGIN
-===================================================== */
+========================= */
 
 app.post("/api/auth/login", async (req, res) => {
-
   try {
-
-    const email =
-      String(req.body.email || "")
-        .trim()
-        .toLowerCase();
-
-    const password =
-      String(req.body.password || "");
+    const {
+      email,
+      password
+    } = req.body;
 
     if (!email || !password) {
-
       return res.status(400).json({
         success: false,
-        message: "Email आणि password टाका."
+        message: "Email and password are required"
       });
-
     }
 
     const { data, error } =
@@ -286,12 +224,10 @@ app.post("/api/auth/login", async (req, res) => {
       });
 
     if (error) {
-
       return res.status(401).json({
         success: false,
         message: error.message
       });
-
     }
 
     const user = data.user;
@@ -312,41 +248,37 @@ app.post("/api/auth/login", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Login successful",
-      user: {
-        id: user.id,
-        email: user.email
-      },
+      user,
       profile,
       channel,
       session: data.session
     });
 
-  }
-  catch (error) {
-
-    console.error("LOGIN ERROR:", error);
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
 
     res.status(500).json({
       success: false,
-      message: "Login failed."
+      message: "Login failed"
     });
-
   }
-
 });
 
-/* =====================================================
+
+/* =========================
    CURRENT USER
-===================================================== */
+========================= */
 
 app.get("/api/me", async (req, res) => {
-
   try {
+    const user = await getUser(req);
 
-    const user = await requireUser(req, res);
-
-    if (!user) return;
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Not logged in"
+      });
+    }
 
     const { data: profile } =
       await supabase
@@ -364,210 +296,172 @@ app.get("/api/me", async (req, res) => {
 
     res.json({
       success: true,
-      user: {
-        id: user.id,
-        email: user.email
-      },
+      user,
       profile,
       channel
     });
 
-  }
-  catch (error) {
-
-    console.error("ME ERROR:", error);
-
+  } catch (err) {
     res.status(500).json({
       success: false,
-      message: "Could not load account."
+      message: "Could not load account"
     });
-
   }
-
 });
 
-/* =====================================================
-   ALL VIDEOS
-===================================================== */
+
+/* =========================
+   VIDEOS
+========================= */
 
 app.get("/api/videos", async (req, res) => {
-
   try {
+    const type = req.query.type;
 
-    const { data, error } =
-      await supabase
-        .from("videos")
-        .select(`
+    let query = supabase
+      .from("videos")
+      .select(`
+        *,
+        channels (
           id,
-          channel_id,
-          title,
-          description,
-          hashtags,
-          type,
-          video_url,
-          thumbnail_url,
-          views,
-          created_at,
-          channels (
-            id,
-            user_id,
-            name,
-            description,
-            avatar_url,
-            subscribers_count
-          )
-        `)
-        .order("created_at", {
-          ascending: false
-        });
+          user_id,
+          name,
+          avatar_url,
+          subscribers_count
+        )
+      `)
+      .order("created_at", {
+        ascending: false
+      });
+
+    if (type) {
+      query = query.eq("type", type);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
-
       return res.status(500).json({
         success: false,
         message: error.message
       });
-
     }
-
-    const videos = (data || []).map(v => ({
-      id: v.id,
-      channelId: v.channel_id,
-      title: v.title,
-      description: v.description || "",
-      hashtags: v.hashtags || "",
-      type: v.type,
-      videoUrl: v.video_url,
-      thumbnailUrl: v.thumbnail_url || "",
-      views: Number(v.views || 0),
-      createdAt: v.created_at,
-      channelName:
-        v.channels?.name ||
-        "Flickora Creator",
-      channelPhoto:
-        v.channels?.avatar_url ||
-        "",
-      subscribers:
-        Number(
-          v.channels?.subscribers_count || 0
-        )
-    }));
 
     res.json({
       success: true,
-      videos
+      videos: data || []
     });
 
-  }
-  catch (error) {
-
-    console.error("VIDEOS ERROR:", error);
+  } catch (err) {
+    console.error("VIDEOS ERROR:", err);
 
     res.status(500).json({
       success: false,
-      message: "Could not load videos."
+      message: "Could not load videos"
     });
-
   }
-
 });
 
-/* =====================================================
+
+/* =========================
    UPLOAD VIDEO
-===================================================== */
+========================= */
 
 app.post(
   "/api/videos/upload",
   upload.fields([
-    {
-      name: "video",
-      maxCount: 1
-    },
-    {
-      name: "thumbnail",
-      maxCount: 1
-    }
+    { name: "video", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 }
   ]),
   async (req, res) => {
 
     try {
+      const user = await getUser(req);
 
-      const user =
-        await requireUser(req, res);
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Please login first"
+        });
+      }
 
-      if (!user) return;
+      const {
+        title,
+        description = "",
+        hashtags = "",
+        type = "video"
+      } = req.body;
 
-      const title =
-        String(req.body.title || "")
-          .trim();
-
-      const description =
-        String(req.body.description || "")
-          .trim();
-
-      const hashtags =
-        String(req.body.hashtags || "")
-          .trim();
-
-      const type =
-        req.body.type === "short"
-          ? "short"
-          : "video";
+      if (!title || !title.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Title is required"
+        });
+      }
 
       const videoFile =
-        req.files?.video?.[0];
+        req.files &&
+        req.files.video &&
+        req.files.video[0];
 
       const thumbnailFile =
-        req.files?.thumbnail?.[0] ||
-        null;
-
-      if (!title) {
-
-        return res.status(400).json({
-          success: false,
-          message: "Video title आवश्यक आहे."
-        });
-
-      }
+        req.files &&
+        req.files.thumbnail &&
+        req.files.thumbnail[0];
 
       if (!videoFile) {
-
         return res.status(400).json({
           success: false,
-          message: "Video file आवश्यक आहे."
+          message: "Video file is required"
         });
-
       }
 
-      const { data: channel, error: channelError } =
+      let { data: channel } =
         await supabase
           .from("channels")
           .select("*")
           .eq("user_id", user.id)
           .maybeSingle();
 
-      if (channelError || !channel) {
+      if (!channel) {
+        const { data: newChannel, error } =
+          await supabase
+            .from("channels")
+            .insert({
+              user_id: user.id,
+              name: user.email
+                ? user.email.split("@")[0]
+                : "Flickora User",
+              description: ""
+            })
+            .select()
+            .single();
 
-        return res.status(400).json({
-          success: false,
-          message: "आधी channel तयार करा."
-        });
+        if (error) {
+          return res.status(500).json({
+            success: false,
+            message: error.message
+          });
+        }
 
+        channel = newChannel;
       }
+
+      const safeTitle =
+        title
+          .trim()
+          .replace(/[^a-zA-Z0-9_-]+/g, "-")
+          .slice(0, 60);
 
       const random =
         crypto.randomBytes(8).toString("hex");
 
       const extension =
-        (
-          videoFile.originalname
-            .split(".")
-            .pop() || "mp4"
-        )
-        .replace(/[^a-zA-Z0-9]/g, "");
+        path.extname(videoFile.originalname)
+          .toLowerCase() || ".mp4";
 
       const videoPath =
-        `${user.id}/${Date.now()}-${random}.${extension}`;
+        `${user.id}/${Date.now()}-${random}-${safeTitle}${extension}`;
 
       const { error: videoUploadError } =
         await supabase.storage
@@ -577,21 +471,16 @@ app.post(
             videoFile.buffer,
             {
               contentType:
-                videoFile.mimetype ||
-                "video/mp4",
+                videoFile.mimetype || "video/mp4",
               upsert: false
             }
           );
 
       if (videoUploadError) {
-
         return res.status(500).json({
           success: false,
-          message:
-            "Video upload failed: " +
-            videoUploadError.message
+          message: videoUploadError.message
         });
-
       }
 
       const {
@@ -605,19 +494,16 @@ app.post(
 
       if (thumbnailFile) {
 
-        const thumbExt =
-          (
+        const thumbExtension =
+          path.extname(
             thumbnailFile.originalname
-              .split(".")
-              .pop() || "jpg"
-          )
-          .replace(/[^a-zA-Z0-9]/g, "");
+          ).toLowerCase() || ".jpg";
 
         const thumbPath =
-          `${user.id}/${Date.now()}-${random}.${thumbExt}`;
+          `${user.id}/${Date.now()}-${random}${thumbExtension}`;
 
         const {
-          error: thumbError
+          error: thumbnailUploadError
         } =
           await supabase.storage
             .from("thumbnails")
@@ -626,36 +512,27 @@ app.post(
               thumbnailFile.buffer,
               {
                 contentType:
-                  thumbnailFile.mimetype ||
-                  "image/jpeg",
+                  thumbnailFile.mimetype || "image/jpeg",
                 upsert: false
               }
             );
 
-        if (thumbError) {
-
-          console.error(
-            "THUMBNAIL ERROR:",
-            thumbError
-          );
-
-        }
-        else {
-
-          const {
-            data: thumbPublic
-          } =
-            supabase.storage
-              .from("thumbnails")
-              .getPublicUrl(
-                thumbPath
-              );
-
-          thumbnailUrl =
-            thumbPublic.publicUrl;
-
+        if (thumbnailUploadError) {
+          return res.status(500).json({
+            success: false,
+            message: thumbnailUploadError.message
+          });
         }
 
+        const {
+          data: thumbPublic
+        } =
+          supabase.storage
+            .from("thumbnails")
+            .getPublicUrl(thumbPath);
+
+        thumbnailUrl =
+          thumbPublic.publicUrl;
       }
 
       const { data: video, error: insertError } =
@@ -663,10 +540,12 @@ app.post(
           .from("videos")
           .insert({
             channel_id: channel.id,
-            title,
-            description,
-            hashtags,
-            type,
+            title: title.trim(),
+            description: String(description || ""),
+            hashtags: String(hashtags || ""),
+            type: type === "short"
+              ? "short"
+              : "video",
             video_url:
               videoPublic.publicUrl,
             thumbnail_url:
@@ -677,354 +556,259 @@ app.post(
           .single();
 
       if (insertError) {
-
         return res.status(500).json({
           success: false,
-          message:
-            "Database save failed: " +
-            insertError.message
+          message: insertError.message
         });
-
       }
 
       res.json({
         success: true,
         message: "Video uploaded successfully",
-        video: {
-          ...video,
-          videoUrl: video.video_url,
-          thumbnailUrl:
-            video.thumbnail_url || "",
-          channelName: channel.name,
-          channelPhoto:
-            channel.avatar_url || "",
-          subscribers:
-            Number(
-              channel.subscribers_count || 0
-            )
-        }
+        video
       });
 
-    }
-    catch (error) {
-
-      console.error(
-        "UPLOAD ERROR:",
-        error
-      );
+    } catch (err) {
+      console.error("UPLOAD ERROR:", err);
 
       res.status(500).json({
         success: false,
-        message: "Upload failed."
+        message: "Upload failed"
       });
-
     }
-
   }
 );
 
-/* =====================================================
-   VIEW +1
-===================================================== */
 
-app.post(
-  "/api/videos/:id/view",
-  async (req, res) => {
+/* =========================
+   VIDEO VIEW
+========================= */
 
-    try {
+app.post("/api/videos/:id/view", async (req, res) => {
+  try {
+    const id = req.params.id;
 
-      const videoId =
-        req.params.id;
+    const { data: video, error: getError } =
+      await supabase
+        .from("videos")
+        .select("views")
+        .eq("id", id)
+        .single();
 
-      const { data: video, error: findError } =
-        await supabase
-          .from("videos")
-          .select("views")
-          .eq("id", videoId)
-          .maybeSingle();
-
-      if (findError || !video) {
-
-        return res.status(404).json({
-          success: false,
-          message: "Video not found."
-        });
-
-      }
-
-      const newViews =
-        Number(video.views || 0) + 1;
-
-      const { error: updateError } =
-        await supabase
-          .from("videos")
-          .update({
-            views: newViews
-          })
-          .eq("id", videoId);
-
-      if (updateError) {
-
-        return res.status(500).json({
-          success: false,
-          message: updateError.message
-        });
-
-      }
-
-      res.json({
-        success: true,
-        views: newViews
-      });
-
-    }
-    catch (error) {
-
-      console.error(
-        "VIEW ERROR:",
-        error
-      );
-
-      res.status(500).json({
+    if (getError || !video) {
+      return res.status(404).json({
         success: false,
-        message: "View update failed."
+        message: "Video not found"
       });
-
     }
 
-  }
-);
+    const newViews =
+      Number(video.views || 0) + 1;
 
-/* =====================================================
+    const { data, error } =
+      await supabase
+        .from("videos")
+        .update({
+          views: newViews
+        })
+        .eq("id", id)
+        .select("views")
+        .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      views: data.views
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Could not update views"
+    });
+  }
+});
+
+
+/* =========================
    CHANNEL
-===================================================== */
+========================= */
 
-app.get(
-  "/api/channels/:id",
-  async (req, res) => {
+app.get("/api/channels/:id", async (req, res) => {
+  try {
+    const channelId = req.params.id;
 
-    try {
+    const { data: channel, error } =
+      await supabase
+        .from("channels")
+        .select("*")
+        .eq("id", channelId)
+        .single();
 
-      const channelId =
-        req.params.id;
+    if (error || !channel) {
+      return res.status(404).json({
+        success: false,
+        message: "Channel not found"
+      });
+    }
 
-      const { data: channel, error } =
-        await supabase
-          .from("channels")
-          .select("*")
-          .eq("id", channelId)
-          .maybeSingle();
-
-      if (error || !channel) {
-
-        return res.status(404).json({
-          success: false,
-          message: "Channel not found."
+    const { data: videos } =
+      await supabase
+        .from("videos")
+        .select("*")
+        .eq("channel_id", channelId)
+        .order("created_at", {
+          ascending: false
         });
 
-      }
+    let subscribed = false;
 
-      const { data: videos } =
+    const user = await getUser(req);
+
+    if (user) {
+      const { data: subscription } =
         await supabase
-          .from("videos")
-          .select("*")
+          .from("subscriptions")
+          .select("subscriber_id")
+          .eq("subscriber_id", user.id)
           .eq("channel_id", channelId)
-          .order("created_at", {
-            ascending: false
-          });
-
-      res.json({
-        success: true,
-        channel,
-        videos: videos || []
-      });
-
-    }
-    catch (error) {
-
-      console.error(
-        "CHANNEL ERROR:",
-        error
-      );
-
-      res.status(500).json({
-        success: false,
-        message: "Channel load failed."
-      });
-
-    }
-
-  }
-);
-
-/* =====================================================
-   UPDATE CHANNEL
-===================================================== */
-
-app.put(
-  "/api/channels/:id",
-  async (req, res) => {
-
-    try {
-
-      const user =
-        await requireUser(req, res);
-
-      if (!user) return;
-
-      const channelId =
-        req.params.id;
-
-      const { data: channel } =
-        await supabase
-          .from("channels")
-          .select("*")
-          .eq("id", channelId)
           .maybeSingle();
 
-      if (!channel) {
-
-        return res.status(404).json({
-          success: false,
-          message: "Channel not found."
-        });
-
-      }
-
-      if (channel.user_id !== user.id) {
-
-        return res.status(403).json({
-          success: false,
-          message: "Not your channel."
-        });
-
-      }
-
-      const name =
-        String(req.body.name || "")
-          .trim();
-
-      const description =
-        String(req.body.description || "")
-          .trim();
-
-      if (!name) {
-
-        return res.status(400).json({
-          success: false,
-          message: "Channel name आवश्यक आहे."
-        });
-
-      }
-
-      const { data: updated, error } =
-        await supabase
-          .from("channels")
-          .update({
-            name,
-            description
-          })
-          .eq("id", channelId)
-          .select()
-          .single();
-
-      if (error) {
-
-        return res.status(500).json({
-          success: false,
-          message: error.message
-        });
-
-      }
-
-      res.json({
-        success: true,
-        channel: updated
-      });
-
-    }
-    catch (error) {
-
-      console.error(
-        "UPDATE CHANNEL ERROR:",
-        error
-      );
-
-      res.status(500).json({
-        success: false,
-        message: "Channel update failed."
-      });
-
+      subscribed = !!subscription;
     }
 
+    res.json({
+      success: true,
+      channel,
+      videos: videos || [],
+      subscribed
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Could not load channel"
+    });
   }
-);
+});
 
-/* =====================================================
+
+/* =========================
+   UPDATE CHANNEL
+========================= */
+
+app.put("/api/channels/:id", async (req, res) => {
+  try {
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const channelId = req.params.id;
+
+    const {
+      name,
+      description
+    } = req.body;
+
+    const { data: channel } =
+      await supabase
+        .from("channels")
+        .select("user_id")
+        .eq("id", channelId)
+        .single();
+
+    if (!channel || channel.user_id !== user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Not your channel"
+      });
+    }
+
+    const updateData = {};
+
+    if (name !== undefined) {
+      updateData.name =
+        String(name).trim();
+    }
+
+    if (description !== undefined) {
+      updateData.description =
+        String(description);
+    }
+
+    const { data, error } =
+      await supabase
+        .from("channels")
+        .update(updateData)
+        .eq("id", channelId)
+        .select()
+        .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      channel: data
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Could not update channel"
+    });
+  }
+});
+
+
+/* =========================
    SUBSCRIBE
-===================================================== */
+========================= */
 
 app.post(
   "/api/channels/:id/subscribe",
   async (req, res) => {
 
     try {
+      const user = await getUser(req);
 
-      const user =
-        await requireUser(req, res);
-
-      if (!user) return;
-
-      const channelId =
-        req.params.id;
-
-      const { data: channel } =
-        await supabase
-          .from("channels")
-          .select("*")
-          .eq("id", channelId)
-          .maybeSingle();
-
-      if (!channel) {
-
-        return res.status(404).json({
+      if (!user) {
+        return res.status(401).json({
           success: false,
-          message: "Channel not found."
+          message: "Please login first"
         });
-
       }
 
-      if (channel.user_id === user.id) {
+      const channelId = req.params.id;
 
-        return res.status(400).json({
-          success: false,
-          message: "स्वतःच्या channel ला subscribe करता येत नाही."
-        });
-
-      }
-
-      const { error: insertError } =
+      const { error } =
         await supabase
           .from("subscriptions")
-          .upsert(
-            {
-              subscriber_id: user.id,
-              channel_id: channelId
-            },
-            {
-              onConflict:
-                "subscriber_id,channel_id",
-              ignoreDuplicates: true
-            }
-          );
+          .upsert({
+            subscriber_id: user.id,
+            channel_id: channelId
+          });
 
-      if (insertError) {
-
+      if (error) {
         return res.status(500).json({
           success: false,
-          message: insertError.message
+          message: error.message
         });
-
       }
 
       const { count } =
@@ -1036,58 +820,49 @@ app.post(
           })
           .eq("channel_id", channelId);
 
-      const subscribers =
-        Number(count || 0);
-
       await supabase
         .from("channels")
         .update({
           subscribers_count:
-            subscribers
+            count || 0
         })
         .eq("id", channelId);
 
       res.json({
         success: true,
         subscribed: true,
-        subscribers
+        subscribers: count || 0
       });
 
-    }
-    catch (error) {
-
-      console.error(
-        "SUBSCRIBE ERROR:",
-        error
-      );
-
+    } catch (err) {
       res.status(500).json({
         success: false,
-        message: "Subscribe failed."
+        message: "Subscribe failed"
       });
-
     }
-
   }
 );
 
-/* =====================================================
+
+/* =========================
    UNSUBSCRIBE
-===================================================== */
+========================= */
 
 app.delete(
   "/api/channels/:id/subscribe",
   async (req, res) => {
 
     try {
+      const user = await getUser(req);
 
-      const user =
-        await requireUser(req, res);
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Please login first"
+        });
+      }
 
-      if (!user) return;
-
-      const channelId =
-        req.params.id;
+      const channelId = req.params.id;
 
       const { error } =
         await supabase
@@ -1097,12 +872,10 @@ app.delete(
           .eq("channel_id", channelId);
 
       if (error) {
-
         return res.status(500).json({
           success: false,
           message: error.message
         });
-
       }
 
       const { count } =
@@ -1114,69 +887,74 @@ app.delete(
           })
           .eq("channel_id", channelId);
 
-      const subscribers =
-        Number(count || 0);
-
       await supabase
         .from("channels")
         .update({
           subscribers_count:
-            subscribers
+            count || 0
         })
         .eq("id", channelId);
 
       res.json({
         success: true,
         subscribed: false,
-        subscribers
+        subscribers: count || 0
       });
 
-    }
-    catch (error) {
-
-      console.error(
-        "UNSUBSCRIBE ERROR:",
-        error
-      );
-
+    } catch (err) {
       res.status(500).json({
         success: false,
-        message: "Unsubscribe failed."
+        message: "Unsubscribe failed"
       });
-
     }
-
   }
 );
 
-/* =====================================================
+
+/* =========================
+   404 API
+========================= */
+
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API route not found"
+  });
+});
+
+
+/* =========================
+   ERROR HANDLER
+========================= */
+
+app.use((err, req, res, next) => {
+  console.error("SERVER ERROR:", err);
+
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      success: false,
+      message: err.message
+    });
+  }
+
+  res.status(500).json({
+    success: false,
+    message: "Internal server error"
+  });
+});
+
+
+/* =========================
    START
-===================================================== */
+========================= */
 
-app.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
-
-    console.log(
-      "================================"
-    );
-
-    console.log(
-      "       FLICKORA YT"
-    );
-
-    console.log(
-      "================================"
-    );
-
-    console.log(
-      `Server running on port ${PORT}`
-    );
-
-    console.log(
-      "Supabase backend connected"
-    );
-
-  }
-);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("");
+  console.log("=================================");
+  console.log("      FLICKORA YT SERVER");
+  console.log("=================================");
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Website: http://127.0.0.1:${PORT}`);
+  console.log("=================================");
+  console.log("");
+});

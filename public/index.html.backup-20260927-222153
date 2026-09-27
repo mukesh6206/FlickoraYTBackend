@@ -1,0 +1,264 @@
+<!DOCTYPE html>  <html lang="en">  
+<head>  
+<meta charset="UTF-8">  
+<meta name="viewport" content="width=device-width,initial-scale=1.0">  
+<title>Flickora</title>  
+<link rel="stylesheet" href="style.css">  
+</head>  <body>  <header class="header">  
+  <div class="logo">  
+    <div class="logoPlay">  
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>  
+    </div>  
+    Flickora  
+  </div>    <div class="headerSpace"></div>    <button class="headerIcon">  
+    <svg viewBox="0 0 24 24">  
+      <path d="M6 8a6 6 0 0112 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/>  
+      <path d="M10 21h4"/>  
+    </svg>  
+    <span class="badge">9+</span>  
+  </button>    <button class="headerIcon">  
+    <svg viewBox="0 0 24 24">  
+      <circle cx="11" cy="11" r="7"/>  
+      <path d="M20 20l-4-4"/>  
+    </svg>  
+  </button>  
+</header>  <div class="categories">  
+  <button class="category active">All</button>  
+  <button class="category">Music</button>  
+  <button class="category">Security</button>  
+  <button class="category">Hacking</button>  
+  <button class="category">Gaming</button>  
+  <button class="category">News</button>  
+</div>  <section id="homePage" class="page active">  
+  <div id="videoList"></div>  
+</section>  <section id="shortsPage" class="page shortsPage">  
+  <div id="shortList"></div>  
+</section>  <!-- UPLOAD -->  <div id="uploadOverlay" class="overlay">    <div class="uploadSheet">  <button class="closeSheet" onclick="closeUpload()">×</button>  
+
+<div class="sheetHandle"></div>  
+
+<h2>Create on Flickora</h2>  
+
+<div class="createOptions">  
+
+  <button class="createOption" onclick="chooseType('video')">  
+    <svg viewBox="0 0 24 24">  
+      <rect x="3" y="5" width="18" height="14" rx="2"/>  
+      <path d="M10 9l5 3-5 3z"/>  
+    </svg>  
+    Video  
+  </button>  
+
+  <button class="createOption" onclick="chooseType('short')">  
+    <svg viewBox="0 0 24 24">  
+      <rect x="7" y="3" width="10" height="18" rx="2"/>  
+      <path d="M10 8l5 4-5 4z"/>  
+    </svg>  
+    Short  
+  </button>  
+
+  <button class="createOption" onclick="chooseType('live')">  
+    <svg viewBox="0 0 24 24">  
+      <circle cx="12" cy="12" r="3"/>  
+      <circle cx="12" cy="12" r="8"/>  
+    </svg>  
+    Live  
+  </button>  
+
+  <button class="createOption" onclick="chooseType('post')">  
+    <svg viewBox="0 0 24 24">  
+      <path d="M4 5h16v14H4z"/>  
+      <path d="M7 9h10M7 13h7"/>  
+    </svg>  
+    Post  
+  </button>  
+
+</div>  
+
+
+<form id="uploadForm" class="form">  
+
+  <input id="title" class="input" placeholder="Title" required>  
+
+  <textarea id="description"  
+    class="input"  
+    placeholder="Description"  
+    rows="3"></textarea>  
+
+  <input id="hashtags"  
+    class="input"  
+    placeholder="#hashtags">  
+
+  <div class="fileBox">  
+    <label>Choose video</label>  
+    <input id="videoFile"  
+      type="file"  
+      accept="video/*"  
+      required>  
+  </div>  
+
+  <div class="fileBox">  
+    <label>Choose thumbnail</label>  
+    <input id="thumbnailFile"  
+      type="file"  
+      accept="image/*">  
+  </div>  
+
+  <input type="hidden" id="type">  
+
+  <button class="uploadAction" type="submit">  
+    Upload to Flickora  
+  </button>  
+
+  <p id="status"></p>  
+
+</form>
+
+  </div>  
+</div>  <!-- PLAYER -->  <div id="playerOverlay" class="playerOverlay">    <div class="playerTop">  <button onclick="minimizePlayer()" class="miniButton">  
+  <svg viewBox="0 0 24 24">  
+    <path d="M6 9l6 6 6-6"/>  
+  </svg>  
+</button>  
+
+<b>Flickora</b>  
+
+<button onclick="closePlayer()" class="playerClose">  
+  ×  
+</button>
+
+  </div>    <div id="playerVideoBox" class="playerVideoBox">  <video  
+  id="playerVideo"  
+  class="playerVideo"  
+  controls  
+  playsinline>  
+</video>  
+
+<button id="miniClose"  
+  class="miniClose"  
+  onclick="closePlayer()">×</button>  
+
+<button id="miniRestore"  
+  class="miniRestore"  
+  onclick="restorePlayer()">↗</button>
+
+  </div>    <div class="playerDetails">  <div id="playerTitle" class="playerTitle">  
+  Video title  
+</div>  
+
+<div id="playerMeta" class="meta">  
+  Flickora Creator • 0 views  
+</div>  
+
+
+<div class="channelRow">  
+
+  <div id="playerAvatar" class="avatar">F</div>  
+
+  <div id="playerChannelName" class="channelName">  
+    Flickora Creator  
+  </div>  
+
+  <button  
+    id="subscribeButton"  
+    class="subscribe"  
+    onclick="toggleSubscribe()">  
+    Subscribe  
+  </button>  
+
+</div>  
+
+
+<div class="actionRow">  
+
+  <button class="action">  
+    👍  
+    <span>Like</span>  
+  </button>  
+
+  <button class="action">  
+    👎  
+    <span>Dislike</span>  
+  </button>  
+
+  <button class="action">  
+    ↗  
+    <span>Share</span>  
+  </button>  
+
+  <button class="action">  
+    🔖  
+    <span>Save</span>  
+  </button>  
+
+  <button class="action">  
+    •••  
+    <span>More</span>  
+  </button>  
+
+</div>  
+
+
+<div class="comments">  
+
+  <h3>  
+    Comments  
+    <span id="commentCount">0</span>  
+  </h3>  
+
+  <div class="comment">  
+
+    <div class="commentAvatar">F</div>  
+
+    <div>  
+      <b>Flickora User</b>  
+      <div>Nice video 👍</div>  
+    </div>  
+
+  </div>  
+
+  <input  
+    class="commentInput"  
+    placeholder="Add a comment...">  
+
+</div>
+
+  </div>    <div class="recommendedSection">  <h2>Recommended</h2>  
+
+<div id="recommendedList"></div>
+
+  </div>  </div>  <!-- CHANNEL -->  <div id="channelOverlay" class="channelOverlay"></div>  <!-- BOTTOM NAV -->  <nav class="bottom">    <button class="navItem active" onclick="showHome()">  
+    <svg viewBox="0 0 24 24">  
+      <path d="M3 11l9-8 9 8"/>  
+      <path d="M5 10v10h14V10"/>  
+      <path d="M9 20v-6h6v6"/>  
+    </svg>  
+    Home  
+  </button>    <button class="navItem" onclick="showShorts()">  
+    <svg viewBox="0 0 24 24">  
+      <path d="M7 4l10 8-10 8z"/>  
+      <path d="M4 7l3-3"/>  
+      <path d="M17 20l3-3"/>  
+    </svg>  
+    Shorts  
+  </button>    <button class="navItem" onclick="openUpload()">  
+    <div class="plus">  
+      <svg viewBox="0 0 24 24">  
+        <path d="M12 5v14"/>  
+        <path d="M5 12h14"/>  
+      </svg>  
+    </div>  
+  </button>    <button class="navItem" onclick="showSubscriptions()">  
+    <svg viewBox="0 0 24 24">  
+      <rect x="3" y="5" width="14" height="14" rx="2"/>  
+      <path d="M17 9l4-2v10l-4-2"/>  
+    </svg>  
+    Subscriptions  
+  </button>    <button class="navItem" onclick="openChannel()">  
+    <div id="bottomAvatar" class="avatar"  
+      style="width:28px;height:28px">  
+      F  
+    </div>  
+    You  
+  </button>  </nav>  <script src="script.js"></script>  </body>  
+</html>
