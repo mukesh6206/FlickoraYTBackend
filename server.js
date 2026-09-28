@@ -1,6 +1,8 @@
 require("dotenv").config();
 
 const express = require("express");
+const helmet = require("helmet");
+const { rateLimit } = require("express-rate-limit");
 const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
@@ -8,6 +10,76 @@ const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
+
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
+/* =========================
+   SECURITY HEADERS
+========================= */
+
+app.use(
+  helmet({
+    contentSecurityPolicy: false
+  })
+);
+
+/* =========================
+   GENERAL API RATE LIMIT
+========================= */
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many requests. Please try again later."
+  }
+});
+
+/* =========================
+   LOGIN / REGISTER LIMIT
+========================= */
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: {
+    success: false,
+    message: "Too many login attempts. Please try again later."
+  }
+});
+
+/* =========================
+   UPLOAD LIMIT
+========================= */
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Upload limit reached. Please try again later."
+  }
+});
+
+const postLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many posts. Please try again later."
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
@@ -45,8 +117,10 @@ const supabaseAuth = createClient(
 const publicDir = path.join(__dirname, "public");
 
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+app.use("/api", apiLimiter);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -422,7 +496,7 @@ async function getUser(req) {
    REGISTER
 ========================= */
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authLimiter, async (req, res) => {
   try {
     const {
       email,
@@ -531,7 +605,7 @@ app.post("/api/auth/register", async (req, res) => {
    LOGIN
 ========================= */
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authLimiter, async (req, res) => {
   try {
     const {
       email,
@@ -697,6 +771,7 @@ app.get("/api/videos", async (req, res) => {
 
 app.post(
   "/api/videos/upload",
+  uploadLimiter,
   upload.fields([
     { name: "video", maxCount: 1 },
     { name: "thumbnail", maxCount: 1 }
@@ -1009,7 +1084,7 @@ app.get("/api/posts", async (req, res) => {
 });
 
 
-app.post("/api/posts", upload.single("image"), async (req, res) => {
+app.post("/api/posts", postLimiter, upload.single("image"), async (req, res) => {
   try {
     const user = await getUser(req);
 
