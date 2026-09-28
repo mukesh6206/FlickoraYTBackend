@@ -5001,10 +5001,27 @@ async function loadSecurityDashboard() {
     document.getElementById("sec500").textContent =
       events.filter(e => e.status === 500).length;
 
-    statusBox.textContent =
-      events.length
-        ? events.length + " security events found."
-        : "No security events recorded.";
+    const count401 = events.filter(e => e.status === 401).length;
+    const count403 = events.filter(e => e.status === 403).length;
+    const count429 = events.filter(e => e.status === 429).length;
+    const count500 = events.filter(e => e.status === 500).length;
+
+    if (events.length === 0) {
+      statusBox.textContent = "🟢 Security Normal — No security events recorded.";
+    } else if (count429 >= 5 || count403 >= 5 || count401 >= 10) {
+      statusBox.textContent =
+        "🔴 Suspicious Activity Detected — " +
+        events.length + " security events found.";
+    } else {
+      statusBox.textContent =
+        "🟡 Activity Detected — " +
+        events.length + " security event(s) found.";
+    }
+
+    if (count500 >= 5) {
+      statusBox.textContent +=
+        " ⚠️ Multiple server errors detected.";
+    }
 
     eventsBox.replaceChildren();
 
