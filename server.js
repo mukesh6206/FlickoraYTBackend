@@ -928,6 +928,359 @@ app.delete(
 );
 
 
+
+/* =========================
+   CREATOR VIDEO EDIT
+========================= */
+
+app.put("/api/videos/:id", async (req, res) => {
+  try {
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const videoId = req.params.id;
+
+    const {
+      title,
+      description,
+      hashtags
+    } = req.body;
+
+    const { data: video, error: videoError } =
+      await supabaseAdmin
+        .from("videos")
+        .select(`
+          id,
+          channel_id,
+          channels (
+            user_id
+          )
+        `)
+        .eq("id", videoId)
+        .single();
+
+    if (videoError || !video) {
+      return res.status(404).json({
+        success: false,
+        message: "Video not found"
+      });
+    }
+
+    if (
+      !video.channels ||
+      video.channels.user_id !== user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You can edit only your own video"
+      });
+    }
+
+    const updateData = {};
+
+    if (title !== undefined) {
+      const cleanTitle = String(title).trim();
+
+      if (!cleanTitle) {
+        return res.status(400).json({
+          success: false,
+          message: "Title is required"
+        });
+      }
+
+      updateData.title = cleanTitle;
+    }
+
+    if (description !== undefined) {
+      updateData.description =
+        String(description);
+    }
+
+    if (hashtags !== undefined) {
+      updateData.hashtags =
+        String(hashtags);
+    }
+
+    const { data, error } =
+      await supabaseAdmin
+        .from("videos")
+        .update(updateData)
+        .eq("id", videoId)
+        .select()
+        .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Video updated successfully",
+      video: data
+    });
+
+  } catch (err) {
+    console.error("EDIT VIDEO ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not edit video"
+    });
+  }
+});
+
+
+/* =========================
+   CREATOR VIDEO DELETE
+========================= */
+
+app.delete("/api/videos/:id", async (req, res) => {
+  try {
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const videoId = req.params.id;
+
+    const { data: video, error: videoError } =
+      await supabaseAdmin
+        .from("videos")
+        .select(`
+          id,
+          channel_id,
+          video_url,
+          thumbnail_url,
+          channels (
+            user_id
+          )
+        `)
+        .eq("id", videoId)
+        .single();
+
+    if (videoError || !video) {
+      return res.status(404).json({
+        success: false,
+        message: "Video not found"
+      });
+    }
+
+    if (
+      !video.channels ||
+      video.channels.user_id !== user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You can delete only your own video"
+      });
+    }
+
+    function getStoragePath(publicUrl, bucket) {
+      if (!publicUrl) return null;
+
+      const marker =
+        `/storage/v1/object/public/${bucket}/`;
+
+      const index =
+        publicUrl.indexOf(marker);
+
+      if (index === -1) return null;
+
+      return decodeURIComponent(
+        publicUrl.slice(index + marker.length)
+      );
+    }
+
+    const videoPath =
+      getStoragePath(
+        video.video_url,
+        "videos"
+      );
+
+    const thumbnailPath =
+      getStoragePath(
+        video.thumbnail_url,
+        "thumbnails"
+      );
+
+    if (videoPath) {
+      await supabaseAdmin.storage
+        .from("videos")
+        .remove([videoPath]);
+    }
+
+    if (thumbnailPath) {
+      await supabaseAdmin.storage
+        .from("thumbnails")
+        .remove([thumbnailPath]);
+    }
+
+    const { error: deleteError } =
+      await supabaseAdmin
+        .from("videos")
+        .delete()
+        .eq("id", videoId);
+
+    if (deleteError) {
+      return res.status(500).json({
+        success: false,
+        message: deleteError.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Video deleted successfully"
+    });
+
+  } catch (err) {
+    console.error("DELETE VIDEO ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not delete video"
+    });
+  }
+});
+
+
+/* =========================
+   CHANNEL PROFILE PHOTO
+========================= */
+
+app.post(
+  "/api/channels/:id/avatar",
+  upload.single("avatar"),
+  async (req, res) => {
+    try {
+      const user = await getUser(req);
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Please login first"
+        });
+      }
+
+      const channelId = req.params.id;
+
+      const { data: channel, error: channelError } =
+        await supabaseAdmin
+          .from("channels")
+          .select("id, user_id, avatar_url")
+          .eq("id", channelId)
+          .single();
+
+      if (
+        channelError ||
+        !channel ||
+        channel.user_id !== user.id
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You can change only your own profile"
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Profile photo is required"
+        });
+      }
+
+      if (!req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({
+          success: false,
+          message: "Only image files are allowed"
+        });
+      }
+
+      const extension =
+        path.extname(
+          req.file.originalname
+        ).toLowerCase() || ".jpg";
+
+      const avatarPath =
+        `${user.id}/profile-${Date.now()}${extension}`;
+
+      const { error: uploadError } =
+        await supabaseAdmin.storage
+          .from("thumbnails")
+          .upload(
+            avatarPath,
+            req.file.buffer,
+            {
+              contentType:
+                req.file.mimetype,
+              upsert: false
+            }
+          );
+
+      if (uploadError) {
+        return res.status(500).json({
+          success: false,
+          message: uploadError.message
+        });
+      }
+
+      const { data: publicData } =
+        supabaseAdmin.storage
+          .from("thumbnails")
+          .getPublicUrl(avatarPath);
+
+      const avatarUrl =
+        publicData.publicUrl;
+
+      const { data, error } =
+        await supabaseAdmin
+          .from("channels")
+          .update({
+            avatar_url: avatarUrl
+          })
+          .eq("id", channelId)
+          .select()
+          .single();
+
+      if (error) {
+        return res.status(500).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Profile photo updated successfully",
+        channel: data,
+        avatar_url: avatarUrl
+      });
+
+    } catch (err) {
+      console.error("AVATAR ERROR:", err);
+
+      res.status(500).json({
+        success: false,
+        message: "Could not update profile photo"
+      });
+    }
+  }
+);
+
+
 /* =========================
    404 API
 ========================= */
