@@ -1173,6 +1173,12 @@ async function loadVideos() {
     renderVideos(currentVideos);
     renderShorts(currentVideos);
 
+    setTimeout(function(){
+
+      openSharedVideoFromUrl();
+
+    }, 300);
+
   }
   catch(error) {
 
@@ -1554,6 +1560,129 @@ function openPlayer(video) {
 
   player.play()
     .catch(function(){});
+
+}
+
+
+
+async function shareCurrentVideo() {
+
+  if (!currentVideo || !currentVideo.id) {
+    alert("Video open नाही.");
+    return;
+  }
+
+  const shareUrl =
+    window.location.origin +
+    window.location.pathname +
+    "?v=" +
+    encodeURIComponent(currentVideo.id);
+
+  const title =
+    currentVideo.title ||
+    "Flickora Video";
+
+  const shareData = {
+    title: title,
+    text: "Watch this video on Flickora",
+    url: shareUrl
+  };
+
+  try {
+
+    if (navigator.share) {
+
+      await navigator.share(shareData);
+
+      return;
+    }
+
+    if (
+      navigator.clipboard &&
+      navigator.clipboard.writeText
+    ) {
+
+      await navigator.clipboard.writeText(
+        shareUrl
+      );
+
+      alert("Video link copied!");
+
+      return;
+    }
+
+    prompt(
+      "Copy this video link:",
+      shareUrl
+    );
+
+  }
+  catch(error) {
+
+    if (
+      error &&
+      error.name === "AbortError"
+    ) {
+      return;
+    }
+
+    try {
+
+      if (
+        navigator.clipboard &&
+        navigator.clipboard.writeText
+      ) {
+
+        await navigator.clipboard.writeText(
+          shareUrl
+        );
+
+        alert("Video link copied!");
+
+      }
+
+    }
+    catch(copyError) {
+
+      prompt(
+        "Copy this video link:",
+        shareUrl
+      );
+
+    }
+
+  }
+
+}
+
+
+function openSharedVideoFromUrl() {
+
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const videoId =
+    params.get("v");
+
+  if (!videoId || !currentVideos.length) {
+    return;
+  }
+
+  const video =
+    currentVideos.find(function(item){
+
+      return String(item.id) ===
+        String(videoId);
+
+    });
+
+  if (video) {
+
+    openPlayer(video);
+
+  }
 
 }
 
@@ -2357,6 +2486,22 @@ function escapeHTML(value) {
 function escapeAttr(value) {
 
   return escapeHTML(value);
+
+}
+
+
+
+const shareButton =
+  document.getElementById(
+    "shareVideoButton"
+  );
+
+if (shareButton) {
+
+  shareButton.addEventListener(
+    "click",
+    shareCurrentVideo
+  );
 
 }
 
