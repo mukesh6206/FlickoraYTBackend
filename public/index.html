@@ -47,6 +47,7 @@
 
 
 <section id="homePage" class="page active">
+  <div id="postList"></div>
   <div id="videoList"></div>
 </section>
 
@@ -142,6 +143,37 @@
       <p id="status"></p>
 
     </form>
+<form id="postForm" class="form">
+
+  <textarea
+    id="postContent"
+    class="input"
+    placeholder="Write something..."
+    rows="5"
+    maxlength="5000"
+    required
+  ></textarea>
+
+  <div class="fileBox">
+    <label>Add photo (optional)</label>
+    <input
+      id="postImage"
+      type="file"
+      accept="image/*"
+    >
+  </div>
+
+  <button
+    class="uploadAction"
+    type="submit"
+  >
+    Publish Post
+  </button>
+
+  <p id="postStatus"></p>
+
+</form>
+
 
   </div>
 </div>

@@ -964,6 +964,250 @@ app.post("/api/videos/:id/view", async (req, res) => {
 });
 
 
+
+/* =========================
+   POSTS
+========================= */
+
+app.get("/api/posts", async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("posts")
+      .select(`
+        *,
+        channels (
+          id,
+          user_id,
+          name,
+          avatar_url
+        )
+      `)
+      .order("created_at", {
+        ascending: false
+      });
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      posts: data || []
+    });
+
+  } catch (err) {
+    console.error("LOAD POSTS ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not load posts"
+    });
+  }
+});
+
+
+app.post("/api/posts", upload.single("image"), async (req, res) => {
+  try {
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const content = String(req.body.content || "").trim();
+
+    if (!content) {
+      return res.status(400).json({
+        success: false,
+        message: "Post text is required"
+      });
+    }
+
+    let { data: channel } = await supabaseAdmin
+      .from("channels")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!channel) {
+      const { data: newChannel, error } =
+        await supabaseAdmin
+          .from("channels")
+          .insert({
+            user_id: user.id,
+            name: user.email
+              ? user.email.split("@")[0]
+              : "Flickora User",
+            description: ""
+          })
+          .select()
+          .single();
+
+      if (error) {
+        return res.status(500).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      channel = newChannel;
+    }
+
+    let imageUrl = null;
+
+    if (req.file) {
+      if (!req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({
+          success: false,
+          message: "Only image files are allowed"
+        });
+      }
+
+      const extension =
+        path.extname(req.file.originalname).toLowerCase() || ".jpg";
+
+      const imagePath =
+        `posts/${user.id}/${Date.now()}-${crypto.randomBytes(8).toString("hex")}${extension}`;
+
+      const { error: imageError } =
+        await supabaseAdmin.storage
+          .from("thumbnails")
+          .upload(imagePath, req.file.buffer, {
+            contentType: req.file.mimetype || "image/jpeg",
+            upsert: false
+          });
+
+      if (imageError) {
+        return res.status(500).json({
+          success: false,
+          message: imageError.message
+        });
+      }
+
+      const { data: publicImage } =
+        supabaseAdmin.storage
+          .from("thumbnails")
+          .getPublicUrl(imagePath);
+
+      imageUrl = publicImage.publicUrl;
+    }
+
+    const { data: post, error } =
+      await supabaseAdmin
+        .from("posts")
+        .insert({
+          channel_id: channel.id,
+          content,
+          image_url: imageUrl
+        })
+        .select(`
+          *,
+          channels (
+            id,
+            user_id,
+            name,
+            avatar_url
+          )
+        `)
+        .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Post published successfully",
+      post
+    });
+
+  } catch (err) {
+    console.error("CREATE POST ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not create post"
+    });
+  }
+});
+
+
+app.delete("/api/posts/:id", async (req, res) => {
+  try {
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const { data: post, error } =
+      await supabaseAdmin
+        .from("posts")
+        .select(`
+          id,
+          channel_id,
+          channels (
+            user_id
+          )
+        `)
+        .eq("id", req.params.id)
+        .single();
+
+    if (error || !post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found"
+      });
+    }
+
+    if (!post.channels || post.channels.user_id !== user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can delete only your own post"
+      });
+    }
+
+    const { error: deleteError } =
+      await supabaseAdmin
+        .from("posts")
+        .delete()
+        .eq("id", req.params.id);
+
+    if (deleteError) {
+      return res.status(500).json({
+        success: false,
+        message: deleteError.message
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Post deleted"
+    });
+
+  } catch (err) {
+    console.error("DELETE POST ERROR:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Could not delete post"
+    });
+  }
+});
+
+
 /* =========================
    CHANNEL
 ========================= */
@@ -995,6 +1239,15 @@ app.get("/api/channels/:id", async (req, res) => {
           ascending: false
         });
 
+    const { data: posts } =
+      await supabaseAdmin
+        .from("posts")
+        .select("*")
+        .eq("channel_id", channelId)
+        .order("created_at", {
+          ascending: false
+        });
+
     let subscribed = false;
 
     const user = await getUser(req);
@@ -1015,6 +1268,7 @@ app.get("/api/channels/:id", async (req, res) => {
       success: true,
       channel,
       videos: videos || [],
+      posts: posts || [],
       subscribed
     });
 
