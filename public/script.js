@@ -5067,3 +5067,14 @@ document.getElementById("flickoraSecurityLogo")
     }
   });
 
+
+
+/* Hide Security Dashboard */
+document.getElementById("securityHide")
+  ?.addEventListener("click", () => {
+    const dashboard = document.getElementById("securityDashboard");
+    if (dashboard) {
+      dashboard.style.display = "none";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
