@@ -1359,9 +1359,10 @@ function createVideoCard(video, isShort = false) {
   if (thumbnail) {
 
     card.innerHTML = `
-      <div class="thumbWrap" style="position:relative;">
+      <div class="thumbWrap" style="position:relative; aspect-ratio:16/9; overflow:hidden;">
         <img
           class="thumbnail"
+          style="width:100%; height:100%; object-fit:cover; display:block;"
           src="${escapeAttr(thumbnail)}"
           alt="${escapeAttr(video.title || "Video")}"
           loading="lazy">
