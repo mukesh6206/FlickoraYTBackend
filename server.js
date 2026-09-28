@@ -1039,6 +1039,177 @@ app.put("/api/videos/:id", async (req, res) => {
 });
 
 
+
+/* =========================
+   CREATOR VIDEO THUMBNAIL
+========================= */
+
+app.post("/api/videos/:id/thumbnail", upload.single("thumbnail"), async (req, res) => {
+  try {
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const videoId = req.params.id;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Thumbnail is required"
+      });
+    }
+
+    if (!String(req.file.mimetype || "").startsWith("image/")) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select an image"
+      });
+    }
+
+    const { data: video, error: videoError } =
+      await supabaseAdmin
+        .from("videos")
+        .select(`
+          id,
+          channel_id,
+          thumbnail_url,
+          channels (
+            user_id
+          )
+        `)
+        .eq("id", videoId)
+        .single();
+
+    if (videoError || !video) {
+      return res.status(404).json({
+        success: false,
+        message: "Video not found"
+      });
+    }
+
+    if (
+      !video.channels ||
+      video.channels.user_id !== user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You can change only your own thumbnail"
+      });
+    }
+
+    function getStoragePath(publicUrl, bucket) {
+      if (!publicUrl) return null;
+
+      const marker =
+        "/storage/v1/object/public/" + bucket + "/";
+
+      const index =
+        publicUrl.indexOf(marker);
+
+      if (index === -1) return null;
+
+      return decodeURIComponent(
+        publicUrl.slice(index + marker.length)
+      );
+    }
+
+    const oldPath =
+      getStoragePath(
+        video.thumbnail_url,
+        "thumbnails"
+      );
+
+    const extension =
+      path.extname(
+        req.file.originalname || ""
+      ).toLowerCase() || ".jpg";
+
+    const newPath =
+      `${user.id}/thumb-${Date.now()}-${crypto.randomBytes(6).toString("hex")}${extension}`;
+
+    const { error: uploadError } =
+      await supabaseAdmin.storage
+        .from("thumbnails")
+        .upload(
+          newPath,
+          req.file.buffer,
+          {
+            contentType:
+              req.file.mimetype || "image/jpeg",
+            upsert: false
+          }
+        );
+
+    if (uploadError) {
+      return res.status(500).json({
+        success: false,
+        message: uploadError.message
+      });
+    }
+
+    const {
+      data: publicData
+    } =
+      supabaseAdmin.storage
+        .from("thumbnails")
+        .getPublicUrl(newPath);
+
+    const thumbnailUrl =
+      publicData.publicUrl;
+
+    const { data: updatedVideo, error: updateError } =
+      await supabaseAdmin
+        .from("videos")
+        .update({
+          thumbnail_url: thumbnailUrl
+        })
+        .eq("id", videoId)
+        .select()
+        .single();
+
+    if (updateError) {
+      await supabaseAdmin.storage
+        .from("thumbnails")
+        .remove([newPath]);
+
+      return res.status(500).json({
+        success: false,
+        message: updateError.message
+      });
+    }
+
+    if (oldPath) {
+      await supabaseAdmin.storage
+        .from("thumbnails")
+        .remove([oldPath]);
+    }
+
+    res.json({
+      success: true,
+      message: "Thumbnail updated successfully",
+      video: updatedVideo,
+      thumbnail_url: thumbnailUrl
+    });
+
+  } catch (err) {
+    console.error(
+      "THUMBNAIL UPDATE ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Could not update thumbnail"
+    });
+  }
+});
+
+
 /* =========================
    CREATOR VIDEO DELETE
 ========================= */
