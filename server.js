@@ -135,6 +135,75 @@ app.use(cors({
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+/* =========================
+   SECURITY MONITOR
+========================= */
+
+const securityEvents = [];
+const MAX_SECURITY_EVENTS = 200;
+
+function recordSecurityEvent(req, status, reason) {
+  if (![401, 403, 429, 500].includes(status)) return;
+
+  securityEvents.unshift({
+    time: new Date().toISOString(),
+    ip: clientIP(req),
+    method: req.method,
+    path: req.originalUrl,
+    status,
+    reason
+  });
+
+  if (securityEvents.length > MAX_SECURITY_EVENTS) {
+    securityEvents.pop();
+  }
+}
+
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    recordSecurityEvent(
+      req,
+      res.statusCode,
+      res.statusCode === 401
+        ? "Unauthorized request"
+        : res.statusCode === 403
+          ? "Forbidden request"
+          : res.statusCode === 429
+            ? "Rate limit / blocked request"
+            : res.statusCode === 500
+              ? "Server error"
+              : ""
+    );
+  });
+
+  next();
+});
+
+app.get("/api/security/events", (req, res) => {
+  const monitorKey =
+    process.env.SECURITY_MONITOR_KEY || "";
+
+  const suppliedKey =
+    req.headers["x-security-key"] || "";
+
+  if (
+    !monitorKey ||
+    suppliedKey !== monitorKey
+  ) {
+    return res.status(403).json({
+      success: false,
+      message: "Security monitor access denied"
+    });
+  }
+
+  res.json({
+    success: true,
+    count: securityEvents.length,
+    events: securityEvents
+  });
+});
+
+
 const blockedIPs = new Map();
 const BLOCK_TIME = 15 * 60 * 1000;
 
