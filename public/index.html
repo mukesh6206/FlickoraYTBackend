@@ -381,6 +381,36 @@
 
 <script src="script.js"></script>
 
+
+<section id="securityDashboard" style="display:none;margin:20px;padding:20px;border-radius:18px;background:#0b1020;border:1px solid #252d4d;color:#fff">
+  <h2>🛡️ Flickora Security</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:15px 0">
+    <div class="security-box"><b id="secTotal">0</b><span>Total</span></div>
+    <div class="security-box"><b id="sec401">0</b><span>401</span></div>
+    <div class="security-box"><b id="sec403">0</b><span>403</span></div>
+    <div class="security-box"><b id="sec429">0</b><span>429</span></div>
+    <div class="security-box"><b id="sec500">0</b><span>500</span></div>
+  </div>
+  <button id="securityRefresh" type="button">Refresh Security Events</button>
+  <p id="securityStatus">Security Monitor ready.</p>
+  <div id="securityEvents"></div>
+</section>
+
+<style>
+.security-box{
+  padding:14px;border-radius:14px;background:#121a30;
+  border:1px solid #273354;text-align:center
+}
+.security-box b{display:block;font-size:24px}
+.security-box span{color:#9da8c7;font-size:13px}
+.security-event{
+  padding:14px;margin-top:10px;border-radius:12px;
+  background:#11182b;border:1px solid #252f4d
+}
+.security-event small{color:#8995b7}
+.security-event code{word-break:break-all}
+</style>
+
 </body>
 </html>
 

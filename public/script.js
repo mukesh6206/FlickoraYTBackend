@@ -4957,3 +4957,90 @@ document.addEventListener(
 
   }
 );
+
+
+/* =========================
+   FLICKORA SECURITY DASHBOARD
+========================= */
+
+async function loadSecurityDashboard() {
+  const dashboard = document.getElementById("securityDashboard");
+  const eventsBox = document.getElementById("securityEvents");
+  const statusBox = document.getElementById("securityStatus");
+
+  if (!dashboard || !eventsBox || !statusBox) return;
+
+  const key = prompt("Enter Security Monitor Key:");
+  if (!key) return;
+
+  statusBox.textContent = "Loading security events...";
+
+  try {
+    const response = await fetch("/api/security/events", {
+      headers: { "x-security-key": key }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      statusBox.textContent = "Access denied.";
+      return;
+    }
+
+    dashboard.style.display = "block";
+
+    const events = Array.isArray(data.events) ? data.events : [];
+
+    document.getElementById("secTotal").textContent = events.length;
+    document.getElementById("sec401").textContent =
+      events.filter(e => e.status === 401).length;
+    document.getElementById("sec403").textContent =
+      events.filter(e => e.status === 403).length;
+    document.getElementById("sec429").textContent =
+      events.filter(e => e.status === 429).length;
+    document.getElementById("sec500").textContent =
+      events.filter(e => e.status === 500).length;
+
+    statusBox.textContent =
+      events.length
+        ? events.length + " security events found."
+        : "No security events recorded.";
+
+    eventsBox.replaceChildren();
+
+    for (const event of events) {
+      const box = document.createElement("div");
+      box.className = "security-event";
+
+      const title = document.createElement("strong");
+      title.textContent = "Status: " + (event.status || 0);
+
+      const time = document.createElement("small");
+      time.textContent = event.time || "";
+
+      const path = document.createElement("code");
+      path.textContent =
+        (event.method || "") + " " + (event.path || "");
+
+      const ip = document.createElement("small");
+      ip.textContent = "IP: " + (event.ip || "unknown");
+
+      const reason = document.createElement("small");
+      reason.textContent = event.reason || "";
+
+      box.append(title, document.createElement("br"));
+      box.append(time, document.createElement("br"), document.createElement("br"));
+      box.append(path, document.createElement("br"), ip);
+      box.append(document.createElement("br"), reason);
+
+      eventsBox.appendChild(box);
+    }
+
+  } catch (error) {
+    console.error(error);
+    statusBox.textContent = "Security Monitor unavailable.";
+  }
+}
+
+document.getElementById("securityRefresh")
+  ?.addEventListener("click", loadSecurityDashboard);
