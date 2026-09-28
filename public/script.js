@@ -5045,9 +5045,25 @@ async function loadSecurityDashboard() {
 document.getElementById("securityRefresh")
   ?.addEventListener("click", loadSecurityDashboard);
 
-/* Flickora Security Button */
-document.getElementById("securityOpenBtn")
+
+/* Hidden Security Dashboard */
+let securityLogoClicks = 0;
+let securityLogoTimer = null;
+
+document.getElementById("flickoraSecurityLogo")
   ?.addEventListener("click", () => {
-    loadSecurityDashboard();
+    securityLogoClicks++;
+
+    clearTimeout(securityLogoTimer);
+
+    securityLogoTimer = setTimeout(() => {
+      securityLogoClicks = 0;
+    }, 1200);
+
+    // Logo वर 5 clicks = Security Dashboard
+    if (securityLogoClicks >= 5) {
+      securityLogoClicks = 0;
+      loadSecurityDashboard();
+    }
   });
 
