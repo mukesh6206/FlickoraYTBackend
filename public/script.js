@@ -1538,47 +1538,26 @@ function closeUpload() {
 
 
 function chooseType(type) {
-
   if (type === "live") {
-
-    alert(
-      "Live feature पुढच्या version मध्ये जोडू."
-    );
-
+    alert("Live feature पुढच्या version मध्ये जोडू.");
     return;
-
   }
+
+  const uploadForm = document.getElementById("uploadForm");
+  const postForm = document.getElementById("postForm");
+
+  if (uploadForm) uploadForm.classList.remove("show");
+  if (postForm) postForm.classList.remove("show");
 
   if (type === "post") {
-
-    alert(
-      "Post feature पुढच्या version मध्ये जोडू."
-    );
-
+    if (postForm) postForm.classList.add("show");
     return;
-
   }
 
-  const typeInput =
-    document.getElementById("type");
-
-  if (typeInput) {
-    typeInput.value = type;
-  }
-
-  const form =
-    document.getElementById("uploadForm");
-
-  if (form) {
-    form.classList.add("show");
-  }
-
+  const typeInput = document.getElementById("type");
+  if (typeInput) typeInput.value = type;
+  if (uploadForm) uploadForm.classList.add("show");
 }
-
-
-/* =========================================================
-   UPLOAD TO SERVER
-========================================================= */
 
 const uploadForm =
   document.getElementById("uploadForm");
