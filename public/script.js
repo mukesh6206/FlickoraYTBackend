@@ -1193,6 +1193,26 @@ async function loadVideos() {
    VIDEO THUMBNAIL
 ========================================================= */
 
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+
+  seconds = Math.floor(seconds);
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0) {
+    return hours + ":" +
+      String(minutes).padStart(2, "0") + ":" +
+      String(secs).padStart(2, "0");
+  }
+
+  return minutes + ":" +
+    String(secs).padStart(2, "0");
+}
+
+
 function getThumbnail(video) {
 
   if (
@@ -1339,7 +1359,7 @@ function createVideoCard(video, isShort = false) {
   if (thumbnail) {
 
     card.innerHTML = `
-      <div class="thumbWrap">
+      <div class="thumbWrap" style="position:relative;">
         <img
           class="thumbnail"
           src="${escapeAttr(thumbnail)}"
@@ -1347,6 +1367,24 @@ function createVideoCard(video, isShort = false) {
           loading="lazy">
 
         <div class="playOverlay">▶</div>
+
+        <div
+          class="videoDuration"
+          style="
+            position:absolute;
+            right:8px;
+            bottom:8px;
+            background:rgba(0,0,0,.85);
+            color:white;
+            padding:3px 6px;
+            border-radius:4px;
+            font-size:12px;
+            font-weight:700;
+            line-height:1.2;
+            z-index:5;
+            pointer-events:none;
+          ">
+        </div>
       </div>
 
       <div class="cardInfo">
@@ -1424,6 +1462,38 @@ function createVideoCard(video, isShort = false) {
     `;
 
   }
+
+  const durationBadge =
+    card.querySelector(".videoDuration");
+
+  if (durationBadge && video.video_url) {
+
+    const durationVideo =
+      document.createElement("video");
+
+    durationVideo.preload = "metadata";
+    durationVideo.src = video.video_url;
+
+    durationVideo.addEventListener(
+      "loadedmetadata",
+      function() {
+        durationBadge.textContent =
+          formatDuration(durationVideo.duration);
+
+        durationVideo.remove();
+      },
+      { once:true }
+    );
+
+    durationVideo.addEventListener(
+      "error",
+      function() {
+        durationVideo.remove();
+      },
+      { once:true }
+    );
+  }
+
 
   card.addEventListener(
     "click",
