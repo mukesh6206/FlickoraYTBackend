@@ -5044,3 +5044,10 @@ async function loadSecurityDashboard() {
 
 document.getElementById("securityRefresh")
   ?.addEventListener("click", loadSecurityDashboard);
+
+/* Flickora Security Button */
+document.getElementById("securityOpenBtn")
+  ?.addEventListener("click", () => {
+    loadSecurityDashboard();
+  });
+
