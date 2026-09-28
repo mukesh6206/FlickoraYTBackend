@@ -2817,8 +2817,82 @@ function showChannelOverlay(data) {
 
       </div>
 
+      <div style="
+        display:flex;
+        gap:8px;
+        overflow-x:auto;
+        padding:0 15px 12px;
+        border-bottom:1px solid #e5e7eb;
+      ">
+
+        <button
+          class="myChannelTab active"
+          data-tab="video"
+          type="button"
+          style="
+            flex:0 0 auto;
+            padding:9px 18px;
+            border:0;
+            border-radius:20px;
+            background:#111827;
+            color:white;
+            font-weight:600;
+          ">
+          Videos
+        </button>
+
+        <button
+          class="myChannelTab"
+          data-tab="short"
+          type="button"
+          style="
+            flex:0 0 auto;
+            padding:9px 18px;
+            border:0;
+            border-radius:20px;
+            background:#f3f4f6;
+            color:#111827;
+            font-weight:600;
+          ">
+          Shorts
+        </button>
+
+        <button
+          class="myChannelTab"
+          data-tab="post"
+          type="button"
+          style="
+            flex:0 0 auto;
+            padding:9px 18px;
+            border:0;
+            border-radius:20px;
+            background:#f3f4f6;
+            color:#111827;
+            font-weight:600;
+          ">
+          Posts
+        </button>
+
+        <button
+          class="myChannelTab"
+          data-tab="live"
+          type="button"
+          style="
+            flex:0 0 auto;
+            padding:9px 18px;
+            border:0;
+            border-radius:20px;
+            background:#f3f4f6;
+            color:#111827;
+            font-weight:600;
+          ">
+          Live
+        </button>
+
+      </div>
+
       <div id="channelVideoList"
-        style="padding:0 15px">
+        style="padding:15px">
       </div>
 
     </div>
@@ -2889,16 +2963,93 @@ function showChannelOverlay(data) {
       "channelVideoList"
     );
 
-  videos.forEach(function(video){
+  function renderMyChannelTab(type) {
 
-    videoList.appendChild(
-      createChannelVideoCard(
-        video,
-        isMyChannel
-      )
+    videoList.innerHTML = "";
+
+    const filtered =
+      videos.filter(function(video) {
+
+        return (
+          (video.type || "video") === type
+        );
+
+      });
+
+    if (!filtered.length) {
+
+      videoList.innerHTML = `
+        <div style="
+          text-align:center;
+          padding:45px 15px;
+          color:#6b7280;
+        ">
+          No ${type === "video"
+            ? "videos"
+            : type === "short"
+              ? "shorts"
+              : type === "post"
+                ? "posts"
+                : "live videos"} yet.
+        </div>
+      `;
+
+      return;
+
+    }
+
+    filtered.forEach(function(video){
+
+      videoList.appendChild(
+        createChannelVideoCard(
+          video,
+          isMyChannel
+        )
+      );
+
+    });
+
+  }
+
+  const myChannelTabs =
+    overlay.querySelectorAll(
+      ".myChannelTab"
+    );
+
+  myChannelTabs.forEach(function(tab){
+
+    tab.addEventListener(
+      "click",
+      function(){
+
+        myChannelTabs.forEach(
+          function(other){
+
+            other.style.background =
+              "#f3f4f6";
+
+            other.style.color =
+              "#111827";
+
+          }
+        );
+
+        tab.style.background =
+          "#111827";
+
+        tab.style.color =
+          "#fff";
+
+        renderMyChannelTab(
+          tab.dataset.tab
+        );
+
+      }
     );
 
   });
+
+  renderMyChannelTab("video");
 
 }
 
