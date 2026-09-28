@@ -1997,13 +1997,77 @@ function createVideoCard(video, isShort = false) {
         </div>
       </div>
 
-      <div class="cardInfo">
+      <div class="cardInfo" style="
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+        padding:10px 2px;
+      ">
 
-        <div class="avatar">
-          ${escapeHTML(
-            channelName.charAt(0).toUpperCase()
-          )}
+        <div class="avatar" style="
+          width:40px;
+          height:40px;
+          min-width:40px;
+          border-radius:50%;
+          overflow:hidden;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          background:#eee;
+        ">
+
+          ${
+            channelAvatar
+              ? `<img
+                  src="${escapeAttr(channelAvatar)}"
+                  alt="${escapeAttr(channelName)}"
+                  style="
+                    width:100%;
+                    height:100%;
+                    object-fit:cover;
+                    display:block;
+                  ">`
+              : `<span style="font-weight:700;font-size:16px;">
+                  ${escapeHTML(channelName.charAt(0).toUpperCase())}
+                </span>`
+          }
+
         </div>
+
+        <div class="cardText" style="
+          flex:1;
+          min-width:0;
+        ">
+
+          <h3 style="
+            margin:0;
+            font-size:16px;
+            line-height:1.3;
+            font-weight:700;
+          ">
+            ${escapeHTML(video.title || "Untitled")}
+          </h3>
+
+          <p style="
+            margin:5px 0 0;
+            color:#606060;
+            font-size:14px;
+          ">
+            ${escapeHTML(channelName)}
+          </p>
+
+          <small style="
+            display:block;
+            margin-top:3px;
+            color:#606060;
+            font-size:13px;
+          ">
+            ${views} views • ${date}
+          </small>
+
+        </div>
+
+      </div>
 
         <div class="cardText">
 
