@@ -5069,12 +5069,19 @@ document.getElementById("flickoraSecurityLogo")
 
 
 
-/* Hide Security Dashboard */
-document.getElementById("securityHide")
-  ?.addEventListener("click", () => {
+
+/* Security Dashboard Hide */
+document.addEventListener("click", function(e) {
+  if (e.target && e.target.id === "securityHide") {
     const dashboard = document.getElementById("securityDashboard");
+
     if (dashboard) {
       dashboard.style.display = "none";
-      window.scrollTo({ top: 0, behavior: "smooth" });
     }
-  });
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+  }
+});
