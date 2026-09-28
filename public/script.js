@@ -1561,6 +1561,18 @@ function openPlayer(video) {
   player.play()
     .catch(function(){});
 
+  // Video सुरू झाल्यावर लगेच floating mini-player
+  setTimeout(function(){
+
+    const currentOverlay =
+      document.getElementById("playerOverlay");
+
+    if (currentOverlay) {
+      currentOverlay.classList.add("miniMode");
+    }
+
+  }, 250);
+
 }
 
 
@@ -1865,28 +1877,28 @@ function updateRecommended(video) {
 
 function minimizePlayer() {
 
-  const box =
+  const overlay =
     document.getElementById(
-      "playerVideoBox"
+      "playerOverlay"
     );
 
-  if (!box) return;
+  if (!overlay) return;
 
-  box.classList.add("mini");
+  overlay.classList.add("miniMode");
 
 }
 
 
 function restorePlayer() {
 
-  const box =
+  const overlay =
     document.getElementById(
-      "playerVideoBox"
+      "playerOverlay"
     );
 
-  if (!box) return;
+  if (!overlay) return;
 
-  box.classList.remove("mini");
+  overlay.classList.remove("miniMode");
 
 }
 
