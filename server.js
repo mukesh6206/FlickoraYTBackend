@@ -133,7 +133,11 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({
+  extended: true,
+  limit: "100kb",
+  parameterLimit: 100
+}));
 
 /* =========================
    SECURITY MONITOR
@@ -2530,7 +2534,7 @@ app.use((err, req, res, next) => {
    START
 ========================= */
 
-app.listen(PORT, "0.0.0.0", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("");
   console.log("=================================");
   console.log("      FLICKORA YT SERVER");
@@ -2540,3 +2544,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log("=================================");
   console.log("");
 });
+
+server.requestTimeout = 120000;
+server.headersTimeout = 15000;
+server.keepAliveTimeout = 5000;
