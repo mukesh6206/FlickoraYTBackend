@@ -850,112 +850,20 @@ function showShorts() {
 }
 
 
-async function showSubscriptions() {
+function showSubscriptions() {
 
-  if (!currentUser || !getToken()) {
+  if (!currentUser) {
+
     openAccount();
+
     return;
+
   }
 
-  const home = document.getElementById("homePage");
-  const shorts = document.getElementById("shortsPage");
+  alert(
+    "Subscriptions page पुढच्या version मध्ये."
+  );
 
-  if (home) home.classList.remove("active");
-  if (shorts) shorts.classList.remove("active");
-
-  setActiveNav(2);
-  window.scrollTo(0, 0);
-
-  let page = document.getElementById("subscriptionsPage");
-
-  if (!page) {
-    page = document.createElement("main");
-    page.id = "subscriptionsPage";
-    page.className = "page";
-    document.body.appendChild(page);
-  }
-
-  page.classList.add("active");
-
-  page.innerHTML = `
-    <section class="videoSection">
-      <h2>Subscriptions</h2>
-      <div class="videoGrid" id="subscriptionsVideoGrid">
-        <p style="padding:20px;color:#888;">
-          Loading subscriptions...
-        </p>
-      </div>
-    </section>
-  `;
-
-  try {
-
-    const data = await apiFetch(
-      "/api/subscriptions/videos"
-    );
-
-    const videos = data.videos || [];
-
-    const grid =
-      document.getElementById(
-        "subscriptionsVideoGrid"
-      );
-
-    if (!grid) return;
-
-    if (!videos.length) {
-
-      grid.innerHTML = `
-        <div style="
-          padding:40px 20px;
-          text-align:center;
-          color:#888;
-          grid-column:1/-1;
-        ">
-          <h3>No videos yet</h3>
-          <p>
-            Subscribe to a channel and its videos
-            will appear here.
-          </p>
-        </div>
-      `;
-
-      return;
-    }
-
-    grid.innerHTML = videos
-      .map(function(video) {
-        return createVideoCard(
-          video,
-          video.type === "short"
-        );
-      })
-      .join("");
-
-  } catch (error) {
-
-    console.error(
-      "Subscriptions error:",
-      error
-    );
-
-    const grid =
-      document.getElementById(
-        "subscriptionsVideoGrid"
-      );
-
-    if (grid) {
-      grid.innerHTML = `
-        <div style="
-          padding:30px;
-          color:#d33;
-          grid-column:1/-1;
-        ">
-          Could not load subscriptions.
-        </div>
-      `;
-    }
-  }
 }
 
 

@@ -850,112 +850,20 @@ function showShorts() {
 }
 
 
-async function showSubscriptions() {
+function showSubscriptions() {
 
-  if (!currentUser || !getToken()) {
+  if (!currentUser) {
+
     openAccount();
+
     return;
+
   }
 
-  const home = document.getElementById("homePage");
-  const shorts = document.getElementById("shortsPage");
+  alert(
+    "Subscriptions page पुढच्या version मध्ये."
+  );
 
-  if (home) home.classList.remove("active");
-  if (shorts) shorts.classList.remove("active");
-
-  setActiveNav(2);
-  window.scrollTo(0, 0);
-
-  let page = document.getElementById("subscriptionsPage");
-
-  if (!page) {
-    page = document.createElement("main");
-    page.id = "subscriptionsPage";
-    page.className = "page";
-    document.body.appendChild(page);
-  }
-
-  page.classList.add("active");
-
-  page.innerHTML = `
-    <section class="videoSection">
-      <h2>Subscriptions</h2>
-      <div class="videoGrid" id="subscriptionsVideoGrid">
-        <p style="padding:20px;color:#888;">
-          Loading subscriptions...
-        </p>
-      </div>
-    </section>
-  `;
-
-  try {
-
-    const data = await apiFetch(
-      "/api/subscriptions/videos"
-    );
-
-    const videos = data.videos || [];
-
-    const grid =
-      document.getElementById(
-        "subscriptionsVideoGrid"
-      );
-
-    if (!grid) return;
-
-    if (!videos.length) {
-
-      grid.innerHTML = `
-        <div style="
-          padding:40px 20px;
-          text-align:center;
-          color:#888;
-          grid-column:1/-1;
-        ">
-          <h3>No videos yet</h3>
-          <p>
-            Subscribe to a channel and its videos
-            will appear here.
-          </p>
-        </div>
-      `;
-
-      return;
-    }
-
-    grid.innerHTML = videos
-      .map(function(video) {
-        return createVideoCard(
-          video,
-          video.type === "short"
-        );
-      })
-      .join("");
-
-  } catch (error) {
-
-    console.error(
-      "Subscriptions error:",
-      error
-    );
-
-    const grid =
-      document.getElementById(
-        "subscriptionsVideoGrid"
-      );
-
-    if (grid) {
-      grid.innerHTML = `
-        <div style="
-          padding:30px;
-          color:#d33;
-          grid-column:1/-1;
-        ">
-          Could not load subscriptions.
-        </div>
-      `;
-    }
-  }
 }
 
 
@@ -1667,7 +1575,8 @@ async function shareCurrentVideo() {
 
   const shareUrl =
     window.location.origin +
-    "/watch/" +
+    window.location.pathname +
+    "?v=" +
     encodeURIComponent(currentVideo.id);
 
   const title =
@@ -2147,11 +2056,6 @@ function showChannelOverlay(data) {
   const videos =
     data.videos || [];
 
-  const isMyChannel =
-    currentUser &&
-    currentChannel &&
-    currentChannel.id === channel.id;
-
   overlay.innerHTML = `
 
     <div style="
@@ -2173,7 +2077,6 @@ function showChannelOverlay(data) {
 
         <button
           id="closeChannelButton"
-          type="button"
           style="
             border:0;
             background:none;
@@ -2195,7 +2098,6 @@ function showChannelOverlay(data) {
           width:70px;
           height:70px;
           border-radius:50%;
-          overflow:hidden;
           background:#7c3aed;
           color:white;
           display:flex;
@@ -2205,23 +2107,9 @@ function showChannelOverlay(data) {
           font-weight:bold;
           margin:auto;
         ">
-          ${
-            channel.avatar_url
-              ? `<img
-                  src="${escapeAttr(channel.avatar_url)}"
-                  alt="Channel"
-                  style="
-                    width:100%;
-                    height:100%;
-                    object-fit:cover;
-                    display:block;
-                  ">`
-              : escapeHTML(
-                  channel.name
-                    .charAt(0)
-                    .toUpperCase()
-                )
-          }
+          ${escapeHTML(
+            channel.name.charAt(0).toUpperCase()
+          )}
         </div>
 
         <h2>
@@ -2242,17 +2130,14 @@ function showChannelOverlay(data) {
         </strong>
 
         ${
-          isMyChannel
-            ? `<p style="
-                color:#6b7280;
-                margin-top:10px;
-              ">
+          currentChannel &&
+          currentChannel.id === channel.id
+            ? `<p style="color:#6b7280">
                 Your channel
               </p>`
             : `
               <button
                 id="channelSubscribeButton"
-                type="button"
                 style="
                   margin-top:15px;
                   padding:11px 22px;
@@ -2282,7 +2167,9 @@ function showChannelOverlay(data) {
   overlay.style.display = "block";
 
   document
-    .getElementById("closeChannelButton")
+    .getElementById(
+      "closeChannelButton"
+    )
     .addEventListener(
       "click",
       closeChannel
@@ -2330,611 +2217,10 @@ function showChannelOverlay(data) {
   videos.forEach(function(video){
 
     videoList.appendChild(
-      createChannelVideoCard(
-        video,
-        isMyChannel
-      )
+      createVideoCard(video)
     );
 
   });
-
-}
-
-
-/* =========================================================
-   MY CHANNEL VIDEO CARD + 3 DOT MENU
-========================================================= */
-
-function createChannelVideoCard(
-  video,
-  isMyChannel
-) {
-
-  const card =
-    document.createElement("div");
-
-  card.style.cssText = `
-    position:relative;
-    margin-bottom:18px;
-    background:#fff;
-    border-radius:12px;
-    overflow:hidden;
-    border:1px solid #e5e7eb;
-  `;
-
-  const thumbnail =
-    getThumbnail(video);
-
-  card.innerHTML = `
-
-    <div style="
-      position:relative;
-      aspect-ratio:16/9;
-      background:#111827;
-      overflow:hidden;
-    ">
-
-      ${
-        thumbnail
-          ? `<img
-              src="${escapeAttr(thumbnail)}"
-              alt="${escapeAttr(video.title || "Video")}"
-              style="
-                width:100%;
-                height:100%;
-                object-fit:cover;
-                display:block;
-              ">`
-          : `<div style="
-              width:100%;
-              height:100%;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              color:#a78bfa;
-              font-size:42px;
-            ">▶</div>`
-      }
-
-      <button
-        class="channelPlayButton"
-        type="button"
-        style="
-          position:absolute;
-          inset:0;
-          border:0;
-          background:transparent;
-          cursor:pointer;
-        "
-        aria-label="Play video">
-      </button>
-
-      ${
-        isMyChannel
-          ? `<button
-              class="channelVideoMenuButton"
-              type="button"
-              aria-label="Video options"
-              style="
-                position:absolute;
-                right:8px;
-                top:8px;
-                width:42px;
-                height:42px;
-                border:0;
-                border-radius:50%;
-                background:rgba(0,0,0,.72);
-                color:#fff;
-                font-size:25px;
-                z-index:10;
-              ">⋮</button>`
-          : ""
-      }
-
-    </div>
-
-    <div style="
-      padding:12px 14px 15px;
-    ">
-
-      <div style="
-        font-weight:700;
-        font-size:16px;
-        line-height:1.35;
-        padding-right:35px;
-      ">
-        ${escapeHTML(video.title || "Untitled")}
-      </div>
-
-      <small style="
-        color:#6b7280;
-        display:block;
-        margin-top:6px;
-      ">
-        ${formatViews(video.views || 0)}
-        views •
-        ${formatDate(video.created_at)}
-      </small>
-
-    </div>
-  `;
-
-  const playButton =
-    card.querySelector(
-      ".channelPlayButton"
-    );
-
-  if (playButton) {
-
-    playButton.addEventListener(
-      "click",
-      function(){
-
-        openPlayer(video);
-
-      }
-    );
-
-  }
-
-  const menuButton =
-    card.querySelector(
-      ".channelVideoMenuButton"
-    );
-
-  if (menuButton) {
-
-    menuButton.addEventListener(
-      "click",
-      function(e){
-
-        e.stopPropagation();
-
-        openMyVideoMenu(
-          video,
-          menuButton
-        );
-
-      }
-    );
-
-  }
-
-  return card;
-}
-
-
-/* =========================================================
-   MY VIDEO 3 DOT MENU
-========================================================= */
-
-function openMyVideoMenu(
-  video,
-  anchor
-) {
-
-  const old =
-    document.getElementById(
-      "myVideoMenu"
-    );
-
-  if (old) {
-    old.remove();
-  }
-
-  const menu =
-    document.createElement("div");
-
-  menu.id =
-    "myVideoMenu";
-
-  menu.style.cssText = `
-    position:fixed;
-    right:18px;
-    top:120px;
-    width:210px;
-    background:#111827;
-    color:#fff;
-    border-radius:14px;
-    padding:7px;
-    z-index:99999;
-    box-shadow:0 15px 45px rgba(0,0,0,.4);
-  `;
-
-  menu.innerHTML = `
-
-    <button
-      type="button"
-      data-action="edit"
-      style="
-        width:100%;
-        padding:13px;
-        border:0;
-        background:none;
-        color:#fff;
-        text-align:left;
-        border-radius:9px;
-      ">
-      ✏️ Edit title
-    </button>
-
-    <button
-      type="button"
-      data-action="thumbnail"
-      style="
-        width:100%;
-        padding:13px;
-        border:0;
-        background:none;
-        color:#fff;
-        text-align:left;
-        border-radius:9px;
-      ">
-      🖼️ Change thumbnail
-    </button>
-
-    <button
-      type="button"
-      data-action="share"
-      style="
-        width:100%;
-        padding:13px;
-        border:0;
-        background:none;
-        color:#fff;
-        text-align:left;
-        border-radius:9px;
-      ">
-      ↗️ Share
-    </button>
-
-    <button
-      type="button"
-      data-action="delete"
-      style="
-        width:100%;
-        padding:13px;
-        border:0;
-        background:none;
-        color:#f87171;
-        text-align:left;
-        border-radius:9px;
-      ">
-      🗑️ Delete video
-    </button>
-
-  `;
-
-  document.body.appendChild(menu);
-
-  const rect =
-    anchor.getBoundingClientRect();
-
-  menu.style.top =
-    Math.min(
-      window.innerHeight - 230,
-      rect.bottom + 6
-    ) + "px";
-
-  menu.style.right =
-    Math.max(
-      8,
-      window.innerWidth - rect.right
-    ) + "px";
-
-  menu
-    .querySelectorAll("button")
-    .forEach(function(button){
-
-      button.addEventListener(
-        "click",
-        async function(){
-
-          const action =
-            button.dataset.action;
-
-          menu.remove();
-
-          if (action === "edit") {
-            await editMyVideoTitle(video);
-          }
-
-          if (action === "thumbnail") {
-            changeMyVideoThumbnail(video);
-          }
-
-          if (action === "share") {
-            shareVideo(video);
-          }
-
-          if (action === "delete") {
-            await deleteMyVideo(video);
-          }
-
-        }
-      );
-
-    });
-
-}
-
-
-/* =========================================================
-   EDIT TITLE
-========================================================= */
-
-async function editMyVideoTitle(video) {
-
-  const newTitle =
-    prompt(
-      "Video title change करा:",
-      video.title || ""
-    );
-
-  if (newTitle === null) {
-    return;
-  }
-
-  const title =
-    newTitle.trim();
-
-  if (!title) {
-    alert("Title रिकामा ठेवता येणार नाही.");
-    return;
-  }
-
-  try {
-
-    const data =
-      await apiFetch(
-        "/api/videos/" +
-        encodeURIComponent(video.id),
-        {
-          method:"PUT",
-          body:JSON.stringify({
-            title:title
-          })
-        }
-      );
-
-    if (!data.success) {
-      throw new Error(
-        data.message || "Edit failed"
-      );
-    }
-
-    await loadVideos();
-
-    if (currentChannel) {
-      openChannel(currentChannel.id);
-    }
-
-    alert("✓ Title updated");
-
-  }
-  catch(error) {
-
-    alert(
-      "Title update failed: " +
-      error.message
-    );
-
-  }
-
-}
-
-
-/* =========================================================
-   CHANGE THUMBNAIL
-========================================================= */
-
-function changeMyVideoThumbnail(video) {
-
-  const input =
-    document.createElement("input");
-
-  input.type = "file";
-  input.accept = "image/*";
-
-  input.addEventListener(
-    "change",
-    async function(){
-
-      const file =
-        input.files &&
-        input.files[0];
-
-      if (!file) {
-        return;
-      }
-
-      if (!file.type.startsWith("image/")) {
-        alert("फक्त image select करा.");
-        return;
-      }
-
-      const formData =
-        new FormData();
-
-      formData.append(
-        "thumbnail",
-        file
-      );
-
-      try {
-
-        const data =
-          await apiFetch(
-            "/api/videos/" +
-            encodeURIComponent(video.id) +
-            "/thumbnail",
-            {
-              method:"POST",
-              body:formData
-            }
-          );
-
-        if (!data.success) {
-          throw new Error(
-            data.message || "Thumbnail update failed"
-          );
-        }
-
-        await loadVideos();
-
-        if (currentChannel) {
-          openChannel(currentChannel.id);
-        }
-
-        alert("✓ Thumbnail changed");
-
-      }
-      catch(error) {
-
-        alert(
-          "Thumbnail change failed: " +
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-  input.click();
-
-}
-
-
-/* =========================================================
-   SHARE MY VIDEO
-========================================================= */
-
-async function shareVideo(video) {
-
-  if (!video || !video.id) {
-    return;
-  }
-
-  const shareUrl =
-    window.location.origin +
-    "/watch/" +
-    encodeURIComponent(video.id);
-
-  const shareData = {
-    title:
-      video.title ||
-      "Flickora Video",
-    text:
-      "Watch this video on Flickora",
-    url:shareUrl
-  };
-
-  try {
-
-    if (navigator.share) {
-
-      await navigator.share(
-        shareData
-      );
-
-      return;
-
-    }
-
-    if (
-      navigator.clipboard &&
-      navigator.clipboard.writeText
-    ) {
-
-      await navigator.clipboard.writeText(
-        shareUrl
-      );
-
-      alert("✓ Video link copied");
-
-      return;
-
-    }
-
-    prompt(
-      "Copy video link:",
-      shareUrl
-    );
-
-  }
-  catch(error) {
-
-    if (
-      error &&
-      error.name === "AbortError"
-    ) {
-      return;
-    }
-
-  }
-
-}
-
-
-/* =========================================================
-   DELETE MY VIDEO
-========================================================= */
-
-async function deleteMyVideo(video) {
-
-  const ok =
-    confirm(
-      'Delete "' +
-      (video.title || "this video") +
-      '"?'
-    );
-
-  if (!ok) {
-    return;
-  }
-
-  try {
-
-    const data =
-      await apiFetch(
-        "/api/videos/" +
-        encodeURIComponent(video.id),
-        {
-          method:"DELETE"
-        }
-      );
-
-    if (!data.success) {
-      throw new Error(
-        data.message || "Delete failed"
-      );
-    }
-
-    if (
-      currentVideo &&
-      currentVideo.id === video.id
-    ) {
-      closePlayer();
-    }
-
-    await loadVideos();
-
-    if (currentChannel) {
-      openChannel(currentChannel.id);
-    }
-
-    alert("✓ Video deleted");
-
-  }
-  catch(error) {
-
-    alert(
-      "Delete failed: " +
-      error.message
-    );
-
-  }
 
 }
 
