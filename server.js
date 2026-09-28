@@ -116,16 +116,125 @@ const supabaseAuth = createClient(
 
 const publicDir = path.join(__dirname, "public");
 
-app.use(cors());
+const allowedOrigins = new Set([
+  "https://flickoraytbackend.onrender.com",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000"
+]);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api", apiLimiter);
+const blockedIPs = new Map();
+const BLOCK_TIME = 15 * 60 * 1000;
+
+function clientIP(req) {
+  return String(
+    req.ip ||
+    req.socket.remoteAddress ||
+    "unknown"
+  );
+}
+
+app.use("/api", (req, res, next) => {
+  const ip = clientIP(req);
+  const until = blockedIPs.get(ip);
+
+  if (until && until > Date.now()) {
+    return res.status(429).json({
+      success: false,
+      message: "Too many requests. Please try again later."
+    });
+  }
+
+  if (until) {
+    blockedIPs.delete(ip);
+  }
+
+  next();
+});
+
+apiLimiter.handler = (req, res, next, options) => {
+  const ip = clientIP(req);
+  blockedIPs.set(ip, Date.now() + BLOCK_TIME);
+
+  res.status(options.statusCode).json({
+    success: false,
+    message: "Too many requests. Please try again later."
+  });
+};
+
+app.use("/api", (req, res, next) => {
+  const ip = clientIP(req);
+  const blockedUntil = blockedIPs.get(ip);
+
+  if (blockedUntil && blockedUntil > Date.now()) {
+    return res.status(429).json({
+      success: false,
+      message: "IP temporarily blocked. Please try again later."
+    });
+  }
+
+  if (blockedUntil) {
+    blockedIPs.delete(ip);
+  }
+
+  apiLimiter(req, res, next);
+});
+
+function isAllowedVideo(buffer) {
+  if (!buffer || buffer.length < 12) return false;
+
+  const ftyp =
+    buffer.toString("ascii", 4, 8);
+
+  const webm =
+    buffer[0] === 0x1a &&
+    buffer[1] === 0x45 &&
+    buffer[2] === 0xdf &&
+    buffer[3] === 0xa3;
+
+  return ftyp === "ftyp" || webm;
+}
+
+function isAllowedImage(buffer) {
+  if (!buffer || buffer.length < 12) return false;
+
+  const jpeg =
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff;
+
+  const png =
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47;
+
+  const webp =
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP";
+
+  return jpeg || png || webp;
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024
+    fileSize: 50 * 1024 * 1024,
+    files: 2,
+    fields: 10,
+    parts: 12
   }
 });
 
@@ -511,9 +620,30 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
       });
     }
 
-    const cleanUsername = String(username).trim();
+    const cleanEmail =
+      String(email).trim().toLowerCase();
 
-    if (cleanUsername.length < 3) {
+    const cleanUsername =
+      String(username).trim();
+
+    if (
+      !cleanEmail ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cleanEmail)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email address"
+      });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters"
+      });
+    }
+
+    if (cleanUsername.length < 3 || cleanUsername.length > 30) {
       return res.status(400).json({
         success: false,
         message: "Username must be at least 3 characters"
@@ -522,7 +652,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
 
     const { data, error } =
       await supabaseAdmin.auth.admin.createUser({
-        email,
+        email: cleanEmail,
         password,
         email_confirm: true
       });
@@ -573,7 +703,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
 
     const { data: loginData, error: loginError } =
       await supabaseAuth.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password
       });
 
@@ -819,6 +949,26 @@ app.post(
         });
       }
 
+      if (!isAllowedVideo(videoFile.buffer)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid video file"
+        });
+      }
+
+      const allowedVideoMime = new Set([
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
+      ]);
+
+      if (!allowedVideoMime.has(videoFile.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          message: "Unsupported video format"
+        });
+      }
+
       let { data: channel } =
         await supabaseAdmin
           .from("channels")
@@ -896,6 +1046,26 @@ app.post(
       let thumbnailUrl = null;
 
       if (thumbnailFile) {
+
+        if (!isAllowedImage(thumbnailFile.buffer)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid thumbnail file"
+          });
+        }
+
+        const allowedImageMime = new Set([
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ]);
+
+        if (!allowedImageMime.has(thumbnailFile.mimetype)) {
+          return res.status(400).json({
+            success: false,
+            message: "Unsupported thumbnail format"
+          });
+        }
 
         const thumbExtension =
           path.extname(
@@ -987,7 +1157,18 @@ app.post(
    VIDEO VIEW
 ========================= */
 
-app.post("/api/videos/:id/view", async (req, res) => {
+const viewLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many view requests. Please try again later."
+  }
+});
+
+app.post("/api/videos/:id/view", viewLimiter, async (req, res) => {
   try {
     const id = req.params.id;
 
