@@ -1106,6 +1106,77 @@ app.put("/api/channels/:id", async (req, res) => {
 
 
 /* =========================
+   UPDATE MY PROFILE
+========================= */
+
+app.put("/api/profiles/me", async (req, res) => {
+  try {
+
+    const user = await getUser(req);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
+    const username =
+      String(req.body.username || "").trim();
+
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required"
+      });
+    }
+
+    if (username.length < 3 || username.length > 30) {
+      return res.status(400).json({
+        success: false,
+        message: "Username must be 3-30 characters"
+      });
+    }
+
+    const { data, error } =
+      await supabaseAdmin
+        .from("profiles")
+        .update({
+          username: username
+        })
+        .eq("id", user.id)
+        .select()
+        .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true,
+      profile: data
+    });
+
+  } catch (err) {
+
+    console.error(
+      "PROFILE UPDATE ERROR:",
+      err
+    );
+
+    res.status(500).json({
+      success: false,
+      message: "Could not update profile"
+    });
+
+  }
+});
+
+
+/* =========================
    SUBSCRIPTION VIDEOS
 ========================= */
 

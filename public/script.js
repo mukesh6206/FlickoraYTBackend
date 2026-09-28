@@ -2771,12 +2771,29 @@ function showChannelOverlay(data) {
 
         ${
           isMyChannel
-            ? `<p style="
+            ? `
+              <p style="
                 color:#6b7280;
                 margin-top:10px;
               ">
                 Your channel
-              </p>`
+              </p>
+
+              <button
+                id="editProfileButton"
+                type="button"
+                style="
+                  margin-top:10px;
+                  padding:11px 20px;
+                  border:0;
+                  border-radius:20px;
+                  background:#111827;
+                  color:white;
+                  font-weight:600;
+                ">
+                Edit Profile
+              </button>
+            `
             : `
               <button
                 id="channelSubscribeButton"
@@ -2815,6 +2832,23 @@ function showChannelOverlay(data) {
       "click",
       closeChannel
     );
+
+
+  const editProfile =
+    document.getElementById(
+      "editProfileButton"
+    );
+
+  if (editProfile) {
+
+    editProfile.addEventListener(
+      "click",
+      function() {
+        openEditProfile(data);
+      }
+    );
+
+  }
 
   const subscribe =
     document.getElementById(
@@ -3466,6 +3500,538 @@ async function deleteMyVideo(video) {
 
 }
 
+
+
+/* =========================================================
+   EDIT PROFILE
+========================================================= */
+
+let profileCropImage = null;
+let profileCropScale = 1;
+let profileCropX = 0;
+let profileCropY = 0;
+
+function openEditProfile(data) {
+
+  const channel = data.channel || {};
+  const overlay = document.getElementById("channelOverlay");
+
+  if (!overlay) return;
+
+  const profile =
+    currentUser && currentUser.profile
+      ? currentUser.profile
+      : {};
+
+  overlay.innerHTML = `
+    <div style="
+      position:fixed;
+      inset:0;
+      z-index:10000;
+      background:#fff;
+      overflow:auto;
+      padding-bottom:40px;
+    ">
+
+      <div style="
+        padding:15px;
+        display:flex;
+        align-items:center;
+        gap:12px;
+        border-bottom:1px solid #e5e7eb;
+      ">
+        <button
+          id="editProfileBack"
+          type="button"
+          style="
+            border:0;
+            background:none;
+            font-size:28px;
+          ">←</button>
+
+        <strong style="font-size:18px;">
+          Edit Profile
+        </strong>
+      </div>
+
+      <div style="
+        max-width:430px;
+        margin:auto;
+        padding:25px 18px;
+      ">
+
+        <div style="
+          display:flex;
+          justify-content:center;
+          margin-bottom:18px;
+        ">
+
+          <div style="
+            width:140px;
+            height:140px;
+            border-radius:50%;
+            overflow:hidden;
+            background:#e5e7eb;
+            border:3px solid #7c3aed;
+            position:relative;
+          ">
+
+            <canvas
+              id="profileCropCanvas"
+              width="280"
+              height="280"
+              style="
+                width:100%;
+                height:100%;
+                display:block;
+              ">
+            </canvas>
+
+          </div>
+
+        </div>
+
+        <label style="
+          display:block;
+          font-weight:600;
+          margin-bottom:7px;
+        ">
+          Profile photo
+        </label>
+
+        <input
+          id="profilePhotoInput"
+          type="file"
+          accept="image/*"
+          style="
+            width:100%;
+            margin-bottom:14px;
+          "
+        >
+
+        <label style="
+          display:block;
+          font-weight:600;
+          margin-bottom:7px;
+        ">
+          Zoom
+        </label>
+
+        <input
+          id="profileZoom"
+          type="range"
+          min="1"
+          max="3"
+          step="0.01"
+          value="1"
+          style="
+            width:100%;
+            margin-bottom:20px;
+          "
+        >
+
+        <label style="
+          display:block;
+          font-weight:600;
+          margin-bottom:7px;
+        ">
+          Username
+        </label>
+
+        <input
+          id="profileUsername"
+          type="text"
+          value="${escapeAttr(profile.username || "")}"
+          maxlength="30"
+          placeholder="Username"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            padding:12px;
+            border:1px solid #d1d5db;
+            border-radius:10px;
+            margin-bottom:16px;
+            font-size:16px;
+          "
+        >
+
+        <label style="
+          display:block;
+          font-weight:600;
+          margin-bottom:7px;
+        ">
+          Channel name
+        </label>
+
+        <input
+          id="profileChannelName"
+          type="text"
+          value="${escapeAttr(channel.name || "")}"
+          maxlength="60"
+          placeholder="Channel name"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            padding:12px;
+            border:1px solid #d1d5db;
+            border-radius:10px;
+            margin-bottom:20px;
+            font-size:16px;
+          "
+        >
+
+        <button
+          id="saveProfileButton"
+          type="button"
+          style="
+            width:100%;
+            padding:13px;
+            border:0;
+            border-radius:10px;
+            background:#7c3aed;
+            color:white;
+            font-size:16px;
+            font-weight:700;
+          ">
+          Save Changes
+        </button>
+
+      </div>
+    </div>
+  `;
+
+  overlay.style.display = "block";
+
+  const canvas =
+    document.getElementById(
+      "profileCropCanvas"
+    );
+
+  const ctx =
+    canvas.getContext("2d");
+
+  function drawProfile() {
+
+    ctx.clearRect(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    if (!profileCropImage) {
+
+      ctx.fillStyle = "#7c3aed";
+
+      ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      ctx.fillStyle = "#fff";
+
+      ctx.font = "bold 90px sans-serif";
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      ctx.fillText(
+        (channel.name || "U")
+          .charAt(0)
+          .toUpperCase(),
+        canvas.width / 2,
+        canvas.height / 2
+      );
+
+      return;
+    }
+
+    const scale =
+      Math.max(
+        canvas.width / profileCropImage.width,
+        canvas.height / profileCropImage.height
+      ) * profileCropScale;
+
+    const w =
+      profileCropImage.width * scale;
+
+    const h =
+      profileCropImage.height * scale;
+
+    const x =
+      (canvas.width - w) / 2 +
+      profileCropX;
+
+    const y =
+      (canvas.height - h) / 2 +
+      profileCropY;
+
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.arc(
+      canvas.width / 2,
+      canvas.height / 2,
+      canvas.width / 2,
+      0,
+      Math.PI * 2
+    );
+
+    ctx.clip();
+
+    ctx.drawImage(
+      profileCropImage,
+      x,
+      y,
+      w,
+      h
+    );
+
+    ctx.restore();
+  }
+
+  drawProfile();
+
+  const fileInput =
+    document.getElementById(
+      "profilePhotoInput"
+    );
+
+  const zoomInput =
+    document.getElementById(
+      "profileZoom"
+    );
+
+  fileInput.addEventListener(
+    "change",
+    function() {
+
+      const file =
+        fileInput.files &&
+        fileInput.files[0];
+
+      if (!file) return;
+
+      const reader =
+        new FileReader();
+
+      reader.onload =
+        function(event) {
+
+          const img =
+            new Image();
+
+          img.onload =
+            function() {
+
+              profileCropImage = img;
+              profileCropScale = 1;
+              profileCropX = 0;
+              profileCropY = 0;
+
+              zoomInput.value = "1";
+
+              drawProfile();
+
+            };
+
+          img.src =
+            event.target.result;
+
+        };
+
+      reader.readAsDataURL(file);
+
+    }
+  );
+
+  zoomInput.addEventListener(
+    "input",
+    function() {
+
+      profileCropScale =
+        Number(
+          zoomInput.value
+        ) || 1;
+
+      drawProfile();
+
+    }
+  );
+
+  document
+    .getElementById("editProfileBack")
+    .addEventListener(
+      "click",
+      function() {
+        showChannelOverlay(data);
+      }
+    );
+
+  document
+    .getElementById("saveProfileButton")
+    .addEventListener(
+      "click",
+      async function() {
+
+        const button =
+          document.getElementById(
+            "saveProfileButton"
+          );
+
+        const username =
+          document
+            .getElementById(
+              "profileUsername"
+            )
+            .value
+            .trim();
+
+        const channelName =
+          document
+            .getElementById(
+              "profileChannelName"
+            )
+            .value
+            .trim();
+
+        if (!username) {
+          alert("Username required");
+          return;
+        }
+
+        if (!channelName) {
+          alert("Channel name required");
+          return;
+        }
+
+        button.disabled = true;
+        button.textContent = "Saving...";
+
+        try {
+
+          const profileResult =
+            await apiFetch(
+              "/api/profiles/me",
+              {
+                method: "PUT",
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+                body: JSON.stringify({
+                  username
+                })
+              }
+            );
+
+          if (!profileResult.success) {
+            throw new Error(
+              profileResult.message ||
+              "Username update failed"
+            );
+          }
+
+          const channelResult =
+            await apiFetch(
+              "/api/channels/" +
+              encodeURIComponent(channel.id),
+              {
+                method: "PUT",
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+                body: JSON.stringify({
+                  name: channelName
+                })
+              }
+            );
+
+          if (!channelResult.success) {
+            throw new Error(
+              channelResult.message ||
+              "Channel update failed"
+            );
+          }
+
+          if (profileCropImage) {
+
+            const blob =
+              await new Promise(
+                function(resolve) {
+
+                  canvas.toBlob(
+                    resolve,
+                    "image/jpeg",
+                    0.9
+                  );
+
+                }
+              );
+
+            if (!blob) {
+              throw new Error(
+                "Could not create profile image"
+              );
+            }
+
+            const formData =
+              new FormData();
+
+            formData.append(
+              "avatar",
+              blob,
+              "profile.jpg"
+            );
+
+            const avatarResult =
+              await apiFetch(
+                "/api/channels/" +
+                encodeURIComponent(channel.id) +
+                "/avatar",
+                {
+                  method: "POST",
+                  body: formData
+                }
+              );
+
+            if (!avatarResult.success) {
+              throw new Error(
+                avatarResult.message ||
+                "Photo update failed"
+              );
+            }
+
+          }
+
+          alert("✓ Profile updated");
+
+          await loadVideos();
+
+          openChannel(channel.id);
+
+        }
+        catch(error) {
+
+          alert(
+            "Profile update failed: " +
+            error.message
+          );
+
+          button.disabled = false;
+          button.textContent =
+            "Save Changes";
+
+        }
+
+      }
+    );
+
+}
 
 function closeChannel() {
 
