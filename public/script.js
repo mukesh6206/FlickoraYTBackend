@@ -1575,8 +1575,7 @@ async function shareCurrentVideo() {
 
   const shareUrl =
     window.location.origin +
-    window.location.pathname +
-    "?v=" +
+    "/watch/" +
     encodeURIComponent(currentVideo.id);
 
   const title =
@@ -2727,8 +2726,7 @@ async function shareVideo(video) {
 
   const shareUrl =
     window.location.origin +
-    window.location.pathname +
-    "?v=" +
+    "/watch/" +
     encodeURIComponent(video.id);
 
   const shareData = {
