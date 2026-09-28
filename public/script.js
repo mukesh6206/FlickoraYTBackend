@@ -812,12 +812,20 @@ function showHome() {
   const shorts =
     document.getElementById("shortsPage");
 
+  const subscriptions =
+    document.getElementById("subscriptionsPage");
+
   if (home) {
     home.classList.add("active");
   }
 
   if (shorts) {
     shorts.classList.remove("active");
+  }
+
+  /* Subscriptions page पूर्णपणे hide करा */
+  if (subscriptions) {
+    subscriptions.remove();
   }
 
   setActiveNav(0);
