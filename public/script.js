@@ -1780,8 +1780,71 @@ async function loadVideos() {
         ? data.videos
         : [];
 
-    renderVideos(currentVideos);
-    renderShorts(currentVideos);
+    /*
+      SUBSCRIBED CHANNEL VIDEOS
+      Home/Shorts वरून वेगळे ठेवायचे.
+      ते फक्त Subscriptions page वर दिसतील.
+    */
+
+    let homeVideos = currentVideos.slice();
+
+    if (currentUser && getToken()) {
+
+      try {
+
+        const subscriptionData =
+          await apiFetch(
+            "/api/subscriptions/videos"
+          );
+
+        const subscribedVideos =
+          Array.isArray(
+            subscriptionData.videos
+          )
+            ? subscriptionData.videos
+            : [];
+
+        const subscribedChannelIds =
+          new Set();
+
+        subscribedVideos.forEach(
+          function(video) {
+
+            if (video.channel_id) {
+
+              subscribedChannelIds.add(
+                video.channel_id
+              );
+
+            }
+
+          }
+        );
+
+        homeVideos =
+          currentVideos.filter(
+            function(video) {
+
+              return !subscribedChannelIds.has(
+                video.channel_id
+              );
+
+            }
+          );
+
+      } catch (subscriptionError) {
+
+        console.warn(
+          "Could not filter subscriptions from Home:",
+          subscriptionError
+        );
+
+      }
+
+    }
+
+    renderVideos(homeVideos);
+    renderShorts(homeVideos);
 
     setTimeout(function(){
 
