@@ -2380,10 +2380,29 @@ function updatePlayerInfo(video) {
 
   if (avatar) {
 
-    avatar.textContent =
-      channelName
-        .charAt(0)
-        .toUpperCase();
+    if (channel.avatar_url) {
+
+      avatar.innerHTML = `
+        <img
+          src="${escapeAttr(channel.avatar_url)}"
+          alt="${escapeAttr(channelName)}"
+          style="
+            width:100%;
+            height:100%;
+            object-fit:cover;
+            border-radius:50%;
+            display:block;
+          ">
+      `;
+
+    } else {
+
+      avatar.textContent =
+        channelName
+          .charAt(0)
+          .toUpperCase();
+
+    }
 
   }
 
