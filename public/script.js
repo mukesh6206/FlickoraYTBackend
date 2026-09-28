@@ -2069,23 +2069,6 @@ function createVideoCard(video, isShort = false) {
 
       </div>
 
-        <div class="cardText">
-
-          <h3>
-            ${escapeHTML(video.title || "Untitled")}
-          </h3>
-
-          <p>
-            ${escapeHTML(channelName)}
-          </p>
-
-          <small>
-            ${views} views • ${date}
-          </small>
-
-        </div>
-
-      </div>
     `;
 
   }
