@@ -205,7 +205,7 @@
     <video
       id="playerVideo"
       class="playerVideo"
-      controls
+
       playsinline>
     </video>
 
@@ -383,3 +383,163 @@
 
 </body>
 </html>
+
+<style>
+/* ONLY 3 PLAYER BUTTONS */
+#flickoraThreeControls{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  z-index:50;
+}
+
+#flickoraThreeControls button{
+  width:44px;
+  height:44px;
+  min-width:44px;
+  min-height:44px;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:rgba(0,0,0,.55);
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+#flickoraThreeControls button:nth-child(2){
+  width:48px;
+  height:48px;
+  min-width:48px;
+  min-height:48px;
+  background:rgba(0,0,0,.68);
+}
+
+#flickoraThreeControls svg{
+  width:21px;
+  height:21px;
+  fill:white;
+  stroke:white;
+}
+
+#flickoraThreeControls button:nth-child(2) svg{
+  width:24px;
+  height:24px;
+}
+</style>
+
+<script>
+(function(){
+
+function addFlickoraButtons(){
+
+  const box = document.getElementById("playerVideoBox");
+  const video = document.getElementById("playerVideo");
+
+  if(!box || !video) return;
+
+  if(document.getElementById("flickoraThreeControls")) return;
+
+  const controls = document.createElement("div");
+  controls.id = "flickoraThreeControls";
+
+  controls.innerHTML = `
+    <button type="button" id="flickoraBackBtn" aria-label="Previous">
+      <svg viewBox="0 0 24 24">
+        <path d="M19 5v14"/>
+        <path d="M5 12l10-7v14z"/>
+      </svg>
+    </button>
+
+    <button type="button" id="flickoraPauseBtn" aria-label="Play">
+      <svg viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    </button>
+
+    <button type="button" id="flickoraNextBtn" aria-label="Next">
+      <svg viewBox="0 0 24 24">
+        <path d="M5 5v14"/>
+        <path d="M19 12L9 5v14z"/>
+      </svg>
+    </button>
+  `;
+
+  box.appendChild(controls);
+
+  const back = document.getElementById("flickoraBackBtn");
+  const pause = document.getElementById("flickoraPauseBtn");
+  const next = document.getElementById("flickoraNextBtn");
+
+  back.onclick = function(e){
+    e.stopPropagation();
+
+    if(typeof playAdjacentVideo === "function"){
+      playAdjacentVideo(-1);
+    }
+  };
+
+  next.onclick = function(e){
+    e.stopPropagation();
+
+    if(typeof playAdjacentVideo === "function"){
+      playAdjacentVideo(1);
+    }
+  };
+
+  pause.onclick = function(e){
+    e.stopPropagation();
+
+    if(video.paused){
+      video.play();
+    }else{
+      video.pause();
+    }
+  };
+
+  video.addEventListener("play", function(){
+    pause.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <path d="M7 5v14"/>
+        <path d="M17 5v14"/>
+      </svg>
+    `;
+  });
+
+  video.addEventListener("pause", function(){
+    pause.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    `;
+  });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", addFlickoraButtons);
+}else{
+  addFlickoraButtons();
+}
+
+})();
+</script>
+
+
+<style>
+/* Hide ONLY the old player buttons */
+#playerPrevBtn,
+#playerNextBtn {
+  display:none !important;
+}
+
+/* Keep ONLY the new 3-button controller */
+#flickoraThreeControls {
+  display:flex !important;
+}
+</style>
+
