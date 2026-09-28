@@ -1955,6 +1955,10 @@ function createVideoCard(video, isShort = false) {
     channel.name ||
     "Flickora Creator";
 
+  const channelAvatar =
+    channel.avatar_url ||
+    "";
+
   const views =
     formatViews(video.views || 0);
 
