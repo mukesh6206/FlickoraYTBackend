@@ -878,13 +878,144 @@ async function showSubscriptions() {
   page.classList.add("active");
 
   page.innerHTML = `
+    <style>
+      #subscriptionsPage {
+        padding-bottom: 90px;
+      }
+
+      .subscriptionChannels {
+        display: flex;
+        gap: 18px;
+        overflow-x: auto;
+        padding: 16px 16px 20px;
+        scrollbar-width: none;
+      }
+
+      .subscriptionChannels::-webkit-scrollbar {
+        display: none;
+      }
+
+      .subscriptionChannel {
+        min-width: 76px;
+        text-align: center;
+        cursor: pointer;
+        color: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+
+      .subscriptionChannelAvatar {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block;
+        margin: auto;
+        background: #252525;
+        border: 2px solid transparent;
+      }
+
+      .subscriptionChannel.active
+      .subscriptionChannelAvatar {
+        border-color: #7c4dff;
+      }
+
+      .subscriptionChannelName {
+        display: block;
+        margin-top: 7px;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .subscriptionTabs {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 0 16px 16px;
+        scrollbar-width: none;
+      }
+
+      .subscriptionTabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .subscriptionTab {
+        flex: 0 0 auto;
+        border: 0;
+        border-radius: 20px;
+        padding: 9px 17px;
+        background: #eeeeee;
+        color: #222;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .subscriptionTab.active {
+        background: #111;
+        color: #fff;
+      }
+
+      .subscriptionTitle {
+        padding: 8px 16px 4px;
+      }
+    </style>
+
     <section class="videoSection">
-      <h2>Subscriptions</h2>
-      <div class="videoGrid" id="subscriptionsVideoGrid">
+
+      <div class="subscriptionTitle">
+        <h2>Subscriptions</h2>
+      </div>
+
+      <div
+        id="subscriptionChannels"
+        class="subscriptionChannels"
+      >
+        <span style="color:#888;">
+          Loading channels...
+        </span>
+      </div>
+
+      <div
+        id="subscriptionTabs"
+        class="subscriptionTabs"
+      >
+        <button class="subscriptionTab active" data-filter="all">
+          All
+        </button>
+
+        <button class="subscriptionTab" data-filter="today">
+          Today
+        </button>
+
+        <button class="subscriptionTab" data-filter="video">
+          Videos
+        </button>
+
+        <button class="subscriptionTab" data-filter="short">
+          Shorts
+        </button>
+
+        <button class="subscriptionTab" data-filter="live">
+          Live
+        </button>
+
+        <button class="subscriptionTab" data-filter="post">
+          Posts
+        </button>
+      </div>
+
+      <div
+        class="videoGrid"
+        id="subscriptionsVideoGrid"
+      >
         <p style="padding:20px;color:#888;">
           Loading subscriptions...
         </p>
       </div>
+
     </section>
   `;
 
@@ -894,43 +1025,191 @@ async function showSubscriptions() {
       "/api/subscriptions/videos"
     );
 
-    const videos = data.videos || [];
+    const videos = Array.isArray(data.videos)
+      ? data.videos
+      : [];
+
+    const channelBox =
+      document.getElementById(
+        "subscriptionChannels"
+      );
 
     const grid =
       document.getElementById(
         "subscriptionsVideoGrid"
       );
 
-    if (!grid) return;
+    if (!channelBox || !grid) return;
 
-    if (!videos.length) {
+    /*
+      UNIQUE SUBSCRIBED CHANNELS
+    */
 
-      grid.innerHTML = `
-        <div style="
-          padding:40px 20px;
-          text-align:center;
-          color:#888;
-          grid-column:1/-1;
-        ">
-          <h3>No videos yet</h3>
-          <p>
-            Subscribe to a channel and its videos
-            will appear here.
-          </p>
-        </div>
+    const channels = [];
+
+    videos.forEach(function(video) {
+
+      const channel = video.channels;
+
+      if (!channel || !channel.id) return;
+
+      const exists = channels.some(function(c) {
+        return c.id === channel.id;
+      });
+
+      if (!exists) {
+        channels.push(channel);
+      }
+
+    });
+
+    /*
+      CHANNEL PROFILES
+    */
+
+    channelBox.innerHTML = "";
+
+    const allButton =
+      document.createElement("button");
+
+    allButton.className =
+      "subscriptionChannel active";
+
+    allButton.type = "button";
+
+    allButton.innerHTML = `
+      <div
+        class="subscriptionChannelAvatar"
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:24px;
+        "
+      >
+        ◎
+      </div>
+      <span class="subscriptionChannelName">
+        All
+      </span>
+    `;
+
+    channelBox.appendChild(allButton);
+
+    channels.forEach(function(channel) {
+
+      const button =
+        document.createElement("button");
+
+      button.className =
+        "subscriptionChannel";
+
+      button.type = "button";
+
+      const avatar =
+        channel.avatar_url ||
+        "https://ui-avatars.com/api/?name=" +
+        encodeURIComponent(
+          channel.name || "Channel"
+        );
+
+      button.innerHTML = `
+        <img
+          class="subscriptionChannelAvatar"
+          src="${avatar}"
+          alt=""
+        >
+
+        <span class="subscriptionChannelName">
+          ${channel.name || "Channel"}
+        </span>
       `;
 
-      return;
-    }
+      button.addEventListener(
+        "click",
+        function() {
 
-    grid.innerHTML = videos
-      .map(function(video) {
-        return createVideoCard(
-          video,
-          video.type === "short"
+          document
+            .querySelectorAll(
+              ".subscriptionChannel"
+            )
+            .forEach(function(item) {
+              item.classList.remove("active");
+            });
+
+          button.classList.add("active");
+
+          renderSubscriptionVideos(
+            videos,
+            "all",
+            channel.id
+          );
+
+        }
+      );
+
+      channelBox.appendChild(button);
+
+    });
+
+    /*
+      FILTER TABS
+    */
+
+    document
+      .querySelectorAll(
+        ".subscriptionTab"
+      )
+      .forEach(function(tab) {
+
+        tab.addEventListener(
+          "click",
+          function() {
+
+            document
+              .querySelectorAll(
+                ".subscriptionTab"
+              )
+              .forEach(function(item) {
+                item.classList.remove(
+                  "active"
+                );
+              });
+
+            tab.classList.add("active");
+
+            document
+              .querySelectorAll(
+                ".subscriptionChannel"
+              )
+              .forEach(function(item) {
+                item.classList.remove(
+                  "active"
+                );
+              });
+
+            allButton.classList.add("active");
+
+            renderSubscriptionVideos(
+              videos,
+              tab.dataset.filter,
+              null
+            );
+
+          }
         );
-      })
-      .join("");
+
+      });
+
+    /*
+      INITIAL ALL
+    */
+
+    renderSubscriptionVideos(
+      videos,
+      "all",
+      null
+    );
 
   } catch (error) {
 
@@ -945,19 +1224,258 @@ async function showSubscriptions() {
       );
 
     if (grid) {
+
       grid.innerHTML = `
         <div style="
           padding:30px;
+          text-align:center;
           color:#d33;
           grid-column:1/-1;
         ">
           Could not load subscriptions.
         </div>
       `;
+
     }
+
   }
+
 }
 
+
+/*
+  SUBSCRIPTION VIDEO FILTER
+*/
+
+function renderSubscriptionVideos(
+  videos,
+  filter,
+  channelId
+) {
+
+  const grid =
+    document.getElementById(
+      "subscriptionsVideoGrid"
+    );
+
+  if (!grid) return;
+
+  let filtered = videos.slice();
+
+  /*
+    CHANNEL FILTER
+  */
+
+  if (channelId) {
+
+    filtered =
+      filtered.filter(function(video) {
+
+        return (
+          video.channel_id === channelId
+        );
+
+      });
+
+  }
+
+  /*
+    TODAY
+  */
+
+  if (filter === "today") {
+
+    const today =
+      new Date();
+
+    const y =
+      today.getFullYear();
+
+    const m =
+      today.getMonth();
+
+    const d =
+      today.getDate();
+
+    filtered =
+      filtered.filter(function(video) {
+
+        if (!video.created_at) {
+          return false;
+        }
+
+        const date =
+          new Date(video.created_at);
+
+        return (
+          date.getFullYear() === y &&
+          date.getMonth() === m &&
+          date.getDate() === d
+        );
+
+      });
+
+  }
+
+  /*
+    NORMAL VIDEOS
+  */
+
+  if (filter === "video") {
+
+    filtered =
+      filtered.filter(function(video) {
+
+        return (
+          video.type !== "short" &&
+          video.type !== "live" &&
+          video.type !== "post"
+        );
+
+      });
+
+  }
+
+  /*
+    SHORTS
+  */
+
+  if (filter === "short") {
+
+    filtered =
+      filtered.filter(function(video) {
+
+        return video.type === "short";
+
+      });
+
+  }
+
+  /*
+    LIVE
+  */
+
+  if (filter === "live") {
+
+    filtered =
+      filtered.filter(function(video) {
+
+        return video.type === "live";
+
+      });
+
+  }
+
+  /*
+    POSTS
+  */
+
+  if (filter === "post") {
+
+    filtered =
+      filtered.filter(function(video) {
+
+        return video.type === "post";
+
+      });
+
+  }
+
+  /*
+    EMPTY
+  */
+
+  if (!filtered.length) {
+
+    let message =
+      "No videos yet.";
+
+    if (filter === "today") {
+      message = "No videos uploaded today.";
+    }
+
+    if (filter === "video") {
+      message = "No videos found.";
+    }
+
+    if (filter === "short") {
+      message = "No Shorts found.";
+    }
+
+    if (filter === "live") {
+      message = "No live videos found.";
+    }
+
+    if (filter === "post") {
+      message = "No posts found.";
+    }
+
+    grid.innerHTML = `
+      <div style="
+        padding:40px 20px;
+        text-align:center;
+        color:#888;
+        grid-column:1/-1;
+      ">
+        ${message}
+      </div>
+    `;
+
+    return;
+
+  }
+
+  /*
+    RENDER CARDS
+  */
+
+  grid.innerHTML = "";
+
+  filtered.forEach(function(video) {
+
+    const card =
+      createVideoCard(
+        video,
+        video.type === "short"
+      );
+
+    /*
+      IMPORTANT:
+      createVideoCard HTML element देत असेल
+      तर appendChild वापरायचा.
+    */
+
+    if (
+      card instanceof HTMLElement
+    ) {
+
+      grid.appendChild(card);
+
+    } else {
+
+      /*
+        जर createVideoCard string देत असेल
+        तर [object HTML element] bug होणार नाही.
+      */
+
+      const wrapper =
+        document.createElement("div");
+
+      wrapper.innerHTML = card;
+
+      while (wrapper.firstChild) {
+
+        grid.appendChild(
+          wrapper.firstChild
+        );
+
+      }
+
+    }
+
+  });
+
+}
 
 function setActiveNav(index) {
 
