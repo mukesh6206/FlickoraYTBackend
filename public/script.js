@@ -1562,17 +1562,6 @@ function openPlayer(video) {
     .catch(function(){});
 
   // Video सुरू झाल्यावर लगेच floating mini-player
-  setTimeout(function(){
-
-    const currentOverlay =
-      document.getElementById("playerOverlay");
-
-    if (currentOverlay) {
-      currentOverlay.classList.add("miniMode");
-    }
-
-  }, 250);
-
 }
 
 
