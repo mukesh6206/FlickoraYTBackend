@@ -3941,64 +3941,151 @@ function openMyVideoMenu(
 ========================================================= */
 
 async function editMyVideoTitle(video) {
+  return new Promise((resolve) => {
 
-  const newTitle =
-    prompt(
-      "Video title change करा:",
-      video.title || ""
-    );
+    const old = document.getElementById("flickoraEditPopup");
+    if (old) old.remove();
 
-  if (newTitle === null) {
-    return;
-  }
+    const popup = document.createElement("div");
+    popup.id = "flickoraEditPopup";
 
-  const title =
-    newTitle.trim();
+    popup.style.cssText = `
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.65);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:100000;
+      padding:20px;
+    `;
 
-  if (!title) {
-    alert("Title रिकामा ठेवता येणार नाही.");
-    return;
-  }
+    popup.innerHTML = `
+      <div style="
+        width:min(420px,100%);
+        background:#111827;
+        color:#fff;
+        border-radius:18px;
+        padding:20px;
+        box-shadow:0 20px 60px rgba(0,0,0,.5);
+      ">
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          margin-bottom:18px;
+        ">
+          <strong style="font-size:19px">Edit video title</strong>
+          <button id="editPopupClose" type="button"
+            style="
+              border:0;
+              background:none;
+              color:#fff;
+              font-size:28px;
+              cursor:pointer;
+            ">×</button>
+        </div>
 
-  try {
+        <input id="editPopupTitle" type="text"
+          value="${escapeAttr(video.title || "")}"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            padding:13px;
+            border-radius:10px;
+            border:1px solid #374151;
+            background:#1f2937;
+            color:#fff;
+            outline:none;
+          ">
 
-    const data =
-      await apiFetch(
-        "/api/videos/" +
-        encodeURIComponent(video.id),
-        {
-          method:"PUT",
-          body:JSON.stringify({
-            title:title
-          })
+        <div style="
+          display:flex;
+          gap:10px;
+          margin-top:16px;
+        ">
+          <button id="editPopupCancel" type="button"
+            style="
+              flex:1;
+              padding:12px;
+              border:0;
+              border-radius:10px;
+              background:#374151;
+              color:#fff;
+            ">Cancel</button>
+
+          <button id="editPopupSave" type="button"
+            style="
+              flex:1;
+              padding:12px;
+              border:0;
+              border-radius:10px;
+              background:#2563eb;
+              color:#fff;
+            ">Save</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(popup);
+
+    const close = () => {
+      popup.remove();
+      resolve();
+    };
+
+    popup.querySelector("#editPopupClose").onclick = close;
+    popup.querySelector("#editPopupCancel").onclick = close;
+
+    popup.addEventListener("click", (e) => {
+      if (e.target === popup) close();
+    });
+
+    popup.querySelector("#editPopupSave").onclick = async () => {
+
+      const input = popup.querySelector("#editPopupTitle");
+      const title = input.value.trim();
+
+      if (!title) {
+        alert("Title रिकामा ठेवता येणार नाही.");
+        return;
+      }
+
+      try {
+
+        const data = await apiFetch(
+          "/api/videos/" + encodeURIComponent(video.id),
+          {
+            method:"PUT",
+            body:JSON.stringify({title:title})
+          }
+        );
+
+        if (!data.success) {
+          throw new Error(data.message || "Edit failed");
         }
-      );
 
-    if (!data.success) {
-      throw new Error(
-        data.message || "Edit failed"
-      );
-    }
+        close();
 
-    await loadVideos();
+        await loadVideos();
 
-    if (currentChannel) {
-      openChannel(currentChannel.id);
-    }
+        if (currentChannel) {
+          openChannel(currentChannel.id);
+        }
 
-    alert("✓ Title updated");
+        alert("✓ Title updated");
 
-  }
-  catch(error) {
+      } catch(error) {
 
-    alert(
-      "Title update failed: " +
-      error.message
-    );
+        alert("Title update failed: " + error.message);
 
-  }
+      }
+    };
 
+    popup.querySelector("#editPopupTitle").focus();
+  });
 }
+
 
 
 /* =========================================================
