@@ -167,6 +167,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   updateAccountUI();
 
+  await initGoogleAuth();
+
   await restoreAccount();
 
   await loadVideos();
@@ -315,12 +317,232 @@ function updateAccountUI() {
 
 
 /* =========================================================
-   AUTH OVERLAY
+   GOOGLE ONLY AUTH
+========================================================= */
+
+let supabaseClient = null;
+
+async function initGoogleAuth() {
+
+  try {
+
+    const response = await fetch("/api/public-config");
+    const config = await response.json();
+
+    if (
+      !config.success ||
+      !config.supabaseUrl ||
+      !config.supabaseAnonKey
+    ) {
+      console.error("Supabase public config missing");
+      return;
+    }
+
+    supabaseClient =
+      window.supabase.createClient(
+        config.supabaseUrl,
+        config.supabaseAnonKey
+      );
+
+    const {
+      data: { session }
+    } = await supabaseClient.auth.getSession();
+
+    if (session && session.access_token) {
+      await syncGoogleSession(session);
+    }
+
+    supabaseClient.auth.onAuthStateChange(
+      function(event, session) {
+
+        setTimeout(async function() {
+
+          if (
+            session &&
+            session.access_token
+          ) {
+
+            await syncGoogleSession(session);
+
+          }
+          else if (event === "SIGNED_OUT") {
+
+            clearSession();
+            updateAccountUI();
+
+          }
+
+        }, 0);
+
+      }
+    );
+
+  }
+  catch (error) {
+
+    console.error(
+      "Google Auth Init Error:",
+      error
+    );
+
+  }
+
+}
+
+
+async function syncGoogleSession(session) {
+
+  try {
+
+    localStorage.setItem(
+      "flickora_token",
+      session.access_token
+    );
+
+    const data =
+      await apiFetch("/api/me");
+
+    if (!data.success) {
+      throw new Error(
+        "Account verification failed"
+      );
+    }
+
+    saveSession({
+      session: session,
+      user: data.user,
+      profile: data.profile,
+      channel: data.channel
+    });
+
+    updateAccountUI();
+
+  }
+  catch (error) {
+
+    console.error(
+      "Google session sync:",
+      error.message
+    );
+
+    clearSession();
+
+  }
+
+}
+
+
+/* =========================================================
+   ACCOUNT BUTTON
+========================================================= */
+
+function createAccountButton() {
+
+  const header =
+    document.querySelector(".header");
+
+  if (!header) return;
+
+  if (
+    document.getElementById(
+      "accountButton"
+    )
+  ) {
+    return;
+  }
+
+  const button =
+    document.createElement("button");
+
+  button.id = "accountButton";
+  button.className = "headerIcon";
+  button.type = "button";
+
+  button.innerHTML = `
+    <span
+      id="accountLetter"
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        width:32px;
+        height:32px;
+        border-radius:50%;
+        background:#6d28d9;
+        color:white;
+        font-weight:700;
+      "
+    >F</span>
+  `;
+
+  button.addEventListener(
+    "click",
+    openAccount
+  );
+
+  header.appendChild(button);
+
+}
+
+
+function updateAccountUI() {
+
+  const letter =
+    document.getElementById(
+      "accountLetter"
+    );
+
+  if (!letter) return;
+
+  if (
+    currentProfile &&
+    currentProfile.username
+  ) {
+
+    letter.textContent =
+      currentProfile.username
+        .charAt(0)
+        .toUpperCase();
+
+  }
+  else {
+
+    letter.textContent = "F";
+
+  }
+
+  const bottomAvatar =
+    document.getElementById(
+      "bottomAvatar"
+    );
+
+  if (
+    bottomAvatar &&
+    currentProfile &&
+    currentProfile.username
+  ) {
+
+    bottomAvatar.textContent =
+      currentProfile.username
+        .charAt(0)
+        .toUpperCase();
+
+  }
+
+}
+
+
+/* =========================================================
+   GOOGLE LOGIN OVERLAY
 ========================================================= */
 
 function createAuthOverlay() {
 
-  if (document.getElementById("authOverlay")) {
+  if (
+    document.getElementById(
+      "authOverlay"
+    )
+  ) {
     return;
   }
 
@@ -347,10 +569,11 @@ function createAuthOverlay() {
       background:#111827;
       color:white;
       border-radius:18px;
-      padding:24px;
+      padding:28px;
       box-sizing:border-box;
       position:relative;
       box-shadow:0 20px 60px rgba(0,0,0,.5);
+      text-align:center;
     ">
 
       <button
@@ -365,98 +588,79 @@ function createAuthOverlay() {
           color:white;
           font-size:30px;
           cursor:pointer;
-        ">×</button>
+        "
+      >×</button>
 
-      <h2 id="authTitle"
-        style="margin:0 0 18px">
-        Login to Flickora
+      <div style="
+        width:62px;
+        height:62px;
+        margin:5px auto 16px;
+        border-radius:50%;
+        background:white;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:30px;
+        font-weight:800;
+        color:#4285F4;
+      ">G</div>
+
+      <h2 style="margin:0 0 8px;">
+        Add account
       </h2>
 
-      <input
-        id="authUsername"
-        placeholder="Username"
-        style="
-          display:none;
-          width:100%;
-          box-sizing:border-box;
-          padding:13px;
-          margin-bottom:12px;
-          border-radius:10px;
-          border:1px solid #374151;
-          background:#1f2937;
-          color:white;
-        ">
-
-      <input
-        id="authEmail"
-        type="email"
-        placeholder="Email"
-        style="
-          width:100%;
-          box-sizing:border-box;
-          padding:13px;
-          margin-bottom:12px;
-          border-radius:10px;
-          border:1px solid #374151;
-          background:#1f2937;
-          color:white;
-        ">
-
-      <input
-        id="authPassword"
-        type="password"
-        placeholder="Password"
-        style="
-          width:100%;
-          box-sizing:border-box;
-          padding:13px;
-          margin-bottom:12px;
-          border-radius:10px;
-          border:1px solid #374151;
-          background:#1f2937;
-          color:white;
-        ">
+      <p style="
+        margin:0 0 22px;
+        color:#9ca3af;
+        font-size:14px;
+      ">
+        Sign in to Flickora with your Google account
+      </p>
 
       <button
-        id="authSubmit"
+        id="googleLoginButton"
         type="button"
         style="
           width:100%;
-          padding:13px;
+          padding:14px;
           border:0;
           border-radius:10px;
-          background:#7c3aed;
-          color:white;
+          background:white;
+          color:#111827;
+          font-size:15px;
           font-weight:700;
           cursor:pointer;
-        ">
-        Login
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          gap:10px;
+        "
+      >
+        <span style="
+          font-size:20px;
+          font-weight:800;
+          color:#4285F4;
+        ">G</span>
+
+        Continue with Google
       </button>
 
-      <p id="authStatus"
+      <p
+        id="authStatus"
         style="
           min-height:20px;
-          font-size:14px;
-          margin:12px 0;
-        "></p>
-
-      <button
-        id="authSwitch"
-        type="button"
-        style="
-          width:100%;
-          border:0;
-          background:none;
+          font-size:13px;
+          margin:14px 0 0;
           color:#a78bfa;
-          cursor:pointer;
-        ">
-        Create new account
-      </button>
+        "
+      ></p>
 
     </div>
   `;
 
-  document.body.appendChild(overlay);
+  document.body.appendChild(
+    overlay
+  );
 
   document
     .getElementById("authClose")
@@ -466,23 +670,13 @@ function createAuthOverlay() {
     );
 
   document
-    .getElementById("authSubmit")
+    .getElementById("googleLoginButton")
     .addEventListener(
       "click",
-      submitAuth
-    );
-
-  document
-    .getElementById("authSwitch")
-    .addEventListener(
-      "click",
-      switchAuthMode
+      signInWithGoogle
     );
 
 }
-
-
-let authMode = "login";
 
 
 function openAccount() {
@@ -497,12 +691,14 @@ function openAccount() {
 
   }
 
-  authMode = "login";
+  const overlay =
+    document.getElementById(
+      "authOverlay"
+    );
 
-  updateAuthMode();
-
-  document.getElementById("authOverlay")
-    .style.display = "flex";
+  if (overlay) {
+    overlay.style.display = "flex";
+  }
 
 }
 
@@ -510,7 +706,9 @@ function openAccount() {
 function closeAccount() {
 
   const overlay =
-    document.getElementById("authOverlay");
+    document.getElementById(
+      "authOverlay"
+    );
 
   if (overlay) {
     overlay.style.display = "none";
@@ -519,177 +717,108 @@ function closeAccount() {
 }
 
 
-function switchAuthMode() {
-
-  authMode =
-    authMode === "login"
-      ? "register"
-      : "login";
-
-  updateAuthMode();
-
-}
-
-
-function updateAuthMode() {
-
-  const title =
-    document.getElementById("authTitle");
-
-  const username =
-    document.getElementById("authUsername");
-
-  const submit =
-    document.getElementById("authSubmit");
-
-  const switchButton =
-    document.getElementById("authSwitch");
-
-  if (!title) return;
-
-  if (authMode === "register") {
-
-    title.textContent =
-      "Create your Flickora account";
-
-    username.style.display = "block";
-
-    submit.textContent =
-      "Create Account";
-
-    switchButton.textContent =
-      "Already have an account? Login";
-
-  }
-  else {
-
-    title.textContent =
-      "Login to Flickora";
-
-    username.style.display = "none";
-
-    submit.textContent =
-      "Login";
-
-    switchButton.textContent =
-      "Create new account";
-
-  }
-
-}
-
-
-async function submitAuth() {
-
-  const email =
-    document.getElementById("authEmail")
-      .value.trim();
-
-  const password =
-    document.getElementById("authPassword")
-      .value;
-
-  const username =
-    document.getElementById("authUsername")
-      .value.trim();
+async function signInWithGoogle() {
 
   const status =
-    document.getElementById("authStatus");
+    document.getElementById(
+      "authStatus"
+    );
 
-  if (!email || !password) {
+  if (!supabaseClient) {
 
-    status.textContent =
-      "Email आणि password भरा.";
+    if (status) {
+      status.textContent =
+        "Google login loading...";
+    }
+
+    await initGoogleAuth();
+
+  }
+
+  if (!supabaseClient) {
+
+    if (status) {
+      status.textContent =
+        "Google login is not configured.";
+    }
 
     return;
 
   }
 
-  if (
-    authMode === "register" &&
-    username.length < 3
-  ) {
-
+  if (status) {
     status.textContent =
-      "Username किमान 3 characters असावा.";
-
-    return;
-
+      "Opening Google...";
   }
-
-  status.textContent =
-    "Please wait...";
 
   try {
 
-    let data;
+    const result =
+      await supabaseClient.auth.signInWithOAuth({
 
-    if (authMode === "register") {
+        provider: "google",
 
-      data =
-        await apiFetch(
-          "/api/auth/register",
-          {
-            method:"POST",
-            body:JSON.stringify({
-              email,
-              password,
-              username
-            })
+        options: {
+          redirectTo:
+            window.location.origin,
+
+          queryParams: {
+            prompt: "select_account"
           }
-        );
+        }
 
+      });
+
+    if (result.error) {
+      throw result.error;
     }
-    else {
-
-      data =
-        await apiFetch(
-          "/api/auth/login",
-          {
-            method:"POST",
-            body:JSON.stringify({
-              email,
-              password
-            })
-          }
-        );
-
-    }
-
-    if (!data.success) {
-      throw new Error(
-        data.message || "Authentication failed"
-      );
-    }
-
-    saveSession(data);
-
-    status.textContent =
-      "✓ Success";
-
-    updateAccountUI();
-
-    await loadVideos();
-
-    setTimeout(function(){
-
-      closeAccount();
-
-      if (currentChannel) {
-        openChannel();
-      }
-
-    },500);
 
   }
   catch (error) {
 
-    console.error(error);
+    console.error(
+      "Google login error:",
+      error
+    );
 
-    status.textContent =
-      error.message || "Something went wrong.";
+    if (status) {
+      status.textContent =
+        error.message ||
+        "Google login failed.";
+    }
 
   }
+
+}
+
+
+/* =========================================================
+   GOOGLE LOGOUT
+========================================================= */
+
+async function logoutGoogle() {
+
+  try {
+
+    if (supabaseClient) {
+      await supabaseClient.auth.signOut();
+    }
+
+  }
+  catch (error) {
+
+    console.error(
+      "Logout error:",
+      error
+    );
+
+  }
+
+  clearSession();
+
+  updateAccountUI();
+
+  await loadVideos();
 
 }
 

@@ -943,6 +943,15 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
    CURRENT USER
 ========================= */
 
+
+app.get("/api/public-config", (req, res) => {
+  res.json({
+    success: true,
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+  });
+});
+
 app.get("/api/me", async (req, res) => {
   try {
     const user = await getUser(req);
