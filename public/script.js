@@ -3799,6 +3799,14 @@ function openMyVideoMenu(
     old.remove();
   }
 
+  const oldMenu =
+    document.getElementById("myVideoMenu");
+
+  if (oldMenu) {
+    oldMenu.remove();
+    return;
+  }
+
   const menu =
     document.createElement("div");
 
