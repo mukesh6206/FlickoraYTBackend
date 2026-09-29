@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Flickora</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="header">
+  <div class="logo" id="flickoraSecurityLogo" title="">
+    <div class="logoPlay">
+      <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    </div>
+    Flickora
+  </div>
+
+  <div class="headerSpace"></div>
+
+  <button class="headerIcon">
+    <svg viewBox="0 0 24 24">
+      <path d="M6 8a6 6 0 0112 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/>
+      <path d="M10 21h4"/>
+    </svg>
+    <span class="badge">9+</span>
+  </button>
+
+  <button class="headerIcon">
+    <svg viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7"/>
+      <path d="M20 20l-4-4"/>
+    </svg>
+  </button>
+</header>
+
+
+<div class="categories">
+  <button class="category active">All</button>
+  <button class="category">Music</button>
+  <button class="category">Security</button>
+  <button class="category">Hacking</button>
+  <button class="category">Gaming</button>
+  <button class="category">News</button>
+</div>
+
+
+<section id="homePage" class="page active">
+  <div id="postList"></div>
+  <div id="videoList"></div>
+</section>
+
+
+<section id="shortsPage" class="page shortsPage">
+  <div id="shortList"></div>
+</section>
+
+
+<!-- UPLOAD -->
+
+<div id="uploadOverlay" class="overlay">
+
+  <div class="uploadSheet">
+
+    <button class="closeSheet" onclick="closeUpload()">×</button>
+
+    <div class="sheetHandle"></div>
+
+    <h2>Create on Flickora</h2>
+
+    <div class="createOptions">
+
+      <button class="createOption" onclick="chooseType('video')">
+        <svg viewBox="0 0 24 24">
+          <rect x="3" y="5" width="18" height="14" rx="2"/>
+          <path d="M10 9l5 3-5 3z"/>
+        </svg>
+        Video
+      </button>
+
+      <button class="createOption" onclick="chooseType('short')">
+        <svg viewBox="0 0 24 24">
+          <rect x="7" y="3" width="10" height="18" rx="2"/>
+          <path d="M10 8l5 4-5 4z"/>
+        </svg>
+        Short
+      </button>
+
+      <button class="createOption" onclick="chooseType('live')">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3"/>
+          <circle cx="12" cy="12" r="8"/>
+        </svg>
+        Live
+      </button>
+
+      <button class="createOption" onclick="chooseType('post')">
+        <svg viewBox="0 0 24 24">
+          <path d="M4 5h16v14H4z"/>
+          <path d="M7 9h10M7 13h7"/>
+        </svg>
+        Post
+      </button>
+
+    </div>
+
+
+    <form id="uploadForm" class="form">
+
+      <input id="title" class="input" placeholder="Title" required>
+
+      <textarea id="description"
+        class="input"
+        placeholder="Description"
+        rows="3"></textarea>
+
+      <input id="hashtags"
+        class="input"
+        placeholder="#hashtags">
+
+      <div class="fileBox">
+        <label>Choose video</label>
+        <input id="videoFile"
+          type="file"
+          accept="video/*"
+          required>
+      </div>
+
+      <div class="fileBox">
+        <label>Choose thumbnail</label>
+        <input id="thumbnailFile"
+          type="file"
+          accept="image/*">
+      </div>
+
+      <input type="hidden" id="type">
+
+      <button class="uploadAction" type="submit">
+        Upload to Flickora
+      </button>
+
+      <p id="status"></p>
+
+    </form>
+<form id="postForm" class="form">
+
+  <textarea
+    id="postContent"
+    class="input"
+    placeholder="Write something..."
+    rows="5"
+    maxlength="5000"
+    required
+  ></textarea>
+
+  <div class="fileBox">
+    <label>Add photo (optional)</label>
+    <input
+      id="postImage"
+      type="file"
+      accept="image/*"
+    >
+  </div>
+
+  <button
+    class="uploadAction"
+    type="submit"
+  >
+    Publish Post
+  </button>
+
+  <p id="postStatus"></p>
+
+</form>
+
+
+  </div>
+</div>
+
+
+<!-- PLAYER -->
+
+<div id="playerOverlay" class="playerOverlay">
+
+  <div class="playerTop">
+
+    <button onclick="minimizePlayer()" class="miniButton">
+      <svg viewBox="0 0 24 24">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    </button>
+
+    <b>Flickora</b>
+
+    <button onclick="closePlayer()" class="playerClose">
+      ×
+    </button>
+
+  </div>
+
+
+  <div id="playerVideoBox" class="playerVideoBox">
+
+    <video
+      id="playerVideo"
+      class="playerVideo"
+
+      playsinline>
+    </video>
+
+    <button id="miniClose"
+      class="miniClose"
+      onclick="closePlayer()">×</button>
+
+    <button id="miniRestore"
+      class="miniRestore"
+      onclick="restorePlayer()">↗</button>
+
+  </div>
+
+
+  <div class="playerDetails">
+
+    <div id="playerTitle" class="playerTitle">
+      Video title
+    </div>
+
+    <div id="playerMeta" class="meta">
+      Flickora Creator • 0 views
+    </div>
+
+
+    <div class="channelRow">
+
+      <div id="playerAvatar" class="avatar">F</div>
+
+      <div id="playerChannelName" class="channelName">
+        Flickora Creator
+      </div>
+
+      <button
+        id="subscribeButton"
+        class="subscribe"
+        onclick="toggleSubscribe()">
+        Subscribe
+      </button>
+
+    </div>
+
+
+    <div class="actionRow">
+
+      <button class="action">
+        👍
+        <span>Like</span>
+      </button>
+
+      <button class="action">
+        👎
+        <span>Dislike</span>
+      </button>
+
+      <button
+        id="shareVideoButton"
+        class="action"
+        type="button">
+        ↗
+        <span>Share</span>
+      </button>
+
+      <button class="action">
+        🔖
+        <span>Save</span>
+      </button>
+
+      <button class="action">
+        •••
+        <span>More</span>
+      </button>
+
+    </div>
+
+
+    <div class="comments">
+
+      <h3>
+        Comments
+        <span id="commentCount">0</span>
+      </h3>
+
+      <div class="comment">
+
+        <div class="commentAvatar">F</div>
+
+        <div>
+          <b>Flickora User</b>
+          <div>Nice video 👍</div>
+        </div>
+
+      </div>
+
+      <input
+        class="commentInput"
+        placeholder="Add a comment...">
+
+    </div>
+
+  </div>
+
+
+  <div class="recommendedSection">
+
+    <h2>Recommended</h2>
+
+    <div id="recommendedList"></div>
+
+  </div>
+
+</div>
+
+
+<!-- CHANNEL -->
+
+<div id="channelOverlay" class="channelOverlay"></div>
+
+
+<!-- BOTTOM NAV -->
+
+<nav class="bottom">
+
+  <button class="navItem active" onclick="showHome()">
+    <svg viewBox="0 0 24 24">
+      <path d="M3 11l9-8 9 8"/>
+      <path d="M5 10v10h14V10"/>
+      <path d="M9 20v-6h6v6"/>
+    </svg>
+    Home
+  </button>
+
+
+  <button class="navItem" onclick="showShorts()">
+    <svg viewBox="0 0 24 24">
+      <path d="M7 4l10 8-10 8z"/>
+      <path d="M4 7l3-3"/>
+      <path d="M17 20l3-3"/>
+    </svg>
+    Shorts
+  </button>
+
+
+  <button class="navItem" onclick="openUpload()">
+    <div class="plus">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 5v14"/>
+        <path d="M5 12h14"/>
+      </svg>
+    </div>
+  </button>
+
+
+  <button class="navItem" onclick="showSubscriptions()">
+    <svg viewBox="0 0 24 24">
+      <rect x="3" y="5" width="14" height="14" rx="2"/>
+      <path d="M17 9l4-2v10l-4-2"/>
+    </svg>
+    Subscriptions
+  </button>
+
+
+  <button class="navItem" onclick="openChannel()">
+    <div id="bottomAvatar" class="avatar"
+      style="width:28px;height:28px">
+      F
+    </div>
+    You
+  </button>
+
+</nav>
+
+
+<script src="script.js"></script>
+
+
+<section id="securityDashboard" style="display:none;margin:20px;padding:20px;border-radius:18px;background:#0b1020;border:1px solid #252d4d;color:#fff">
+  <h2>🛡️ Flickora Security</h2>
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 18px">
+  <span id="securityStatus" style="padding:7px 12px;border-radius:20px;background:#123d25;color:#63f59a;font-size:13px;font-weight:700">
+    🟢 Security Active
+  </span>
+  <button id="securityHide" type="button" style="padding:8px 13px;border:0;border-radius:10px;background:#252d4d;color:white;font-weight:700">
+    Hide Dashboard
+  </button>
+</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:15px 0">
+    <div class="security-box"><b id="secTotal">0</b><span>Total</span></div>
+    <div class="security-box"><b id="sec401">0</b><span>401</span></div>
+    <div class="security-box"><b id="sec403">0</b><span>403</span></div>
+    <div class="security-box"><b id="sec429">0</b><span>429</span></div>
+    <div class="security-box"><b id="sec500">0</b><span>500</span></div>
+  </div>
+  <button id="securityRefresh" type="button">Refresh Security Events</button>
+  <p id="securityStatus">Security Monitor ready.</p>
+  <div id="securityEvents"></div>
+</section>
+
+<style>
+.security-box{
+  padding:14px;border-radius:14px;background:#121a30;
+  border:1px solid #273354;text-align:center
+}
+.security-box b{display:block;font-size:24px}
+.security-box span{color:#9da8c7;font-size:13px}
+.security-event{
+  padding:14px;margin-top:10px;border-radius:12px;
+  background:#11182b;border:1px solid #252f4d
+}
+.security-event small{color:#8995b7}
+.security-event code{word-break:break-all}
+</style>
+
+
+
+
+</body>
+</html>
+
+<style>
+/* ONLY 3 PLAYER BUTTONS */
+#flickoraThreeControls{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  z-index:50;
+}
+
+#flickoraThreeControls button{
+  width:44px;
+  height:44px;
+  min-width:44px;
+  min-height:44px;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:rgba(0,0,0,.55);
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+#flickoraThreeControls button:nth-child(2){
+  width:48px;
+  height:48px;
+  min-width:48px;
+  min-height:48px;
+  background:rgba(0,0,0,.68);
+}
+
+#flickoraThreeControls svg{
+  width:21px;
+  height:21px;
+  fill:white;
+  stroke:white;
+}
+
+#flickoraThreeControls button:nth-child(2) svg{
+  width:24px;
+  height:24px;
+}
+</style>
+
+<script>
+(function(){
+
+function addFlickoraButtons(){
+
+  const box = document.getElementById("playerVideoBox");
+  const video = document.getElementById("playerVideo");
+
+  if(!box || !video) return;
+
+  if(document.getElementById("flickoraThreeControls")) return;
+
+  const controls = document.createElement("div");
+  controls.id = "flickoraThreeControls";
+
+  controls.innerHTML = `
+    <button type="button" id="flickoraBackBtn" aria-label="Previous">
+      <svg viewBox="0 0 24 24">
+        <path d="M19 5v14"/>
+        <path d="M5 12l10-7v14z"/>
+      </svg>
+    </button>
+
+    <button type="button" id="flickoraPauseBtn" aria-label="Play">
+      <svg viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    </button>
+
+    <button type="button" id="flickoraNextBtn" aria-label="Next">
+      <svg viewBox="0 0 24 24">
+        <path d="M5 5v14"/>
+        <path d="M19 12L9 5v14z"/>
+      </svg>
+    </button>
+  `;
+
+  box.appendChild(controls);
+
+  const back = document.getElementById("flickoraBackBtn");
+  const pause = document.getElementById("flickoraPauseBtn");
+  const next = document.getElementById("flickoraNextBtn");
+
+  back.onclick = function(e){
+    e.stopPropagation();
+
+    if(typeof playAdjacentVideo === "function"){
+      playAdjacentVideo(-1);
+    }
+  };
+
+  next.onclick = function(e){
+    e.stopPropagation();
+
+    if(typeof playAdjacentVideo === "function"){
+      playAdjacentVideo(1);
+    }
+  };
+
+  pause.onclick = function(e){
+    e.stopPropagation();
+
+    if(video.paused){
+      video.play();
+    }else{
+      video.pause();
+    }
+  };
+
+  video.addEventListener("play", function(){
+    pause.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <path d="M7 5v14"/>
+        <path d="M17 5v14"/>
+      </svg>
+    `;
+  });
+
+  video.addEventListener("pause", function(){
+    pause.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    `;
+  });
+}
+
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", addFlickoraButtons);
+}else{
+  addFlickoraButtons();
+}
+
+})();
+</script>
+
+
+<style>
+/* Hide ONLY the old player buttons */
+#playerPrevBtn,
+#playerNextBtn {
+  display:none !important;
+}
+
+/* Keep ONLY the new 3-button controller */
+#flickoraThreeControls {
+  display:flex !important;
+}
+</style>
+

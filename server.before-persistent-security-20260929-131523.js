@@ -146,46 +146,28 @@ app.use(express.urlencoded({
 const securityEvents = [];
 const MAX_SECURITY_EVENTS = 200;
 
-async function recordSecurityEvent(req, status, reason) {
+function recordSecurityEvent(req, status, reason) {
   if (![401, 403, 429, 500].includes(status)) return;
 
-  const event = {
+  securityEvents.unshift({
     time: new Date().toISOString(),
     ip: clientIP(req),
     method: req.method,
     path: req.originalUrl,
     status,
     reason
-  };
-
-  securityEvents.unshift(event);
+  });
 
   if (securityEvents.length > MAX_SECURITY_EVENTS) {
     securityEvents.pop();
-  }
-
-  try {
-    await supabaseAdmin
-      .from("security_events")
-      .insert({
-        created_at: event.time,
-        ip: event.ip,
-        method: event.method,
-        path: event.path,
-        status: event.status,
-        reason: event.reason
-      });
-  } catch (error) {
-    console.error(
-      "SECURITY LOG SAVE ERROR:",
-      error.message
-    );
   }
 }
 
 app.use((req, res, next) => {
   res.on("finish", () => {
-    const reason =
+    recordSecurityEvent(
+      req,
+      res.statusCode,
       res.statusCode === 401
         ? "Unauthorized request"
         : res.statusCode === 403
@@ -194,19 +176,14 @@ app.use((req, res, next) => {
             ? "Rate limit / blocked request"
             : res.statusCode === 500
               ? "Server error"
-              : "";
-
-    recordSecurityEvent(
-      req,
-      res.statusCode,
-      reason
-    ).catch(() => {});
+              : ""
+    );
   });
 
   next();
 });
 
-app.get("/api/security/events", async (req, res) => {
+app.get("/api/security/events", (req, res) => {
   const monitorKey =
     process.env.SECURITY_MONITOR_KEY || "";
 
@@ -223,59 +200,13 @@ app.get("/api/security/events", async (req, res) => {
     });
   }
 
-  try {
-    const { data, error } =
-      await supabaseAdmin
-        .from("security_events")
-        .select(
-          "id, created_at, ip, method, path, status, reason"
-        )
-        .order("created_at", {
-          ascending: false
-        })
-        .limit(MAX_SECURITY_EVENTS);
-
-    if (error) {
-      console.error(
-        "SECURITY LOG READ ERROR:",
-        error.message
-      );
-
-      return res.json({
-        success: true,
-        count: securityEvents.length,
-        events: securityEvents
-      });
-    }
-
-    const events = (data || []).map(event => ({
-      time: event.created_at,
-      ip: event.ip,
-      method: event.method,
-      path: event.path,
-      status: event.status,
-      reason: event.reason
-    }));
-
-    res.json({
-      success: true,
-      count: events.length,
-      events
-    });
-
-  } catch (error) {
-    console.error(
-      "SECURITY MONITOR ERROR:",
-      error.message
-    );
-
-    res.json({
-      success: true,
-      count: securityEvents.length,
-      events: securityEvents
-    });
-  }
+  res.json({
+    success: true,
+    count: securityEvents.length,
+    events: securityEvents
+  });
 });
+
 
 const blockedIPs = new Map();
 const BLOCK_TIME = 15 * 60 * 1000;
@@ -943,15 +874,6 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
    CURRENT USER
 ========================= */
 
-
-app.get("/api/public-config", (req, res) => {
-  res.json({
-    success: true,
-    supabaseUrl: process.env.SUPABASE_URL,
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY
-  });
-});
-
 app.get("/api/me", async (req, res) => {
   try {
     const user = await getUser(req);
@@ -991,45 +913,6 @@ app.get("/api/me", async (req, res) => {
     });
   }
 });
-
-
-
-
-/* =========================
-   NOTIFICATIONS HELPER
-========================= */
-
-async function createNotification({
-  userId,
-  actorId = null,
-  type,
-  message,
-  videoId = null,
-  channelId = null
-}) {
-  if (!userId || !type || !message) return;
-
-  if (actorId && userId === actorId) return;
-
-  try {
-    await supabaseAdmin
-      .from("notifications")
-      .insert({
-        user_id: userId,
-        actor_id: actorId,
-        type,
-        message,
-        video_id: videoId,
-        channel_id: channelId,
-        is_read: false
-      });
-  } catch (error) {
-    console.error(
-      "NOTIFICATION CREATE ERROR:",
-      error.message
-    );
-  }
-}
 
 
 /* =========================
@@ -1323,32 +1206,6 @@ app.post(
           success: false,
           message: insertError.message
         });
-      }
-
-      /* Notify subscribers about new upload */
-      try {
-        const { data: subscribers } =
-          await supabaseAdmin
-            .from("subscriptions")
-            .select("subscriber_id")
-            .eq("channel_id", channel.id);
-
-        for (const subscriber of (subscribers || [])) {
-          await createNotification({
-            userId: subscriber.subscriber_id,
-            actorId: user.id,
-            type: "new_video",
-            message:
-              `${channel.name || "A channel"} uploaded a new video: ${video.title}`,
-            videoId: video.id,
-            channelId: channel.id
-          });
-        }
-      } catch (notificationError) {
-        console.error(
-          "NEW VIDEO NOTIFICATION ERROR:",
-          notificationError.message
-        );
       }
 
       res.json({
@@ -2033,32 +1890,6 @@ app.post(
         })
         .eq("id", channelId);
 
-      /* Notify channel owner */
-      try {
-        const { data: targetChannel } =
-          await supabaseAdmin
-            .from("channels")
-            .select("id, user_id, name")
-            .eq("id", channelId)
-            .maybeSingle();
-
-        if (targetChannel) {
-          await createNotification({
-            userId: targetChannel.user_id,
-            actorId: user.id,
-            type: "subscribe",
-            message:
-              `${user.email || "Someone"} subscribed to your channel`,
-            channelId: channelId
-          });
-        }
-      } catch (notificationError) {
-        console.error(
-          "SUBSCRIBE NOTIFICATION ERROR:",
-          notificationError.message
-        );
-      }
-
       res.json({
         success: true,
         subscribed: true,
@@ -2664,410 +2495,6 @@ app.post(
     }
   }
 );
-
-
-
-
-/* =========================
-   VIDEO LIKE
-========================= */
-
-app.post("/api/videos/:id/like", async (req, res) => {
-  try {
-    const user = await getUser(req);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Please login first"
-      });
-    }
-
-    const videoId = req.params.id;
-
-    const { data: video, error: videoError } =
-      await supabaseAdmin
-        .from("videos")
-        .select(`
-          id,
-          title,
-          channel_id,
-          channels (
-            user_id,
-            name
-          )
-        `)
-        .eq("id", videoId)
-        .maybeSingle();
-
-    if (videoError || !video) {
-      return res.status(404).json({
-        success: false,
-        message: "Video not found"
-      });
-    }
-
-    const { data: existing } =
-      await supabaseAdmin
-        .from("video_likes")
-        .select("video_id")
-        .eq("video_id", videoId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-    if (existing) {
-      const { count } =
-        await supabaseAdmin
-          .from("video_likes")
-          .select("*", {
-            count: "exact",
-            head: true
-          })
-          .eq("video_id", videoId);
-
-      return res.json({
-        success: true,
-        liked: true,
-        likes: count || 0
-      });
-    }
-
-    const { error: likeError } =
-      await supabaseAdmin
-        .from("video_likes")
-        .insert({
-          video_id: videoId,
-          user_id: user.id
-        });
-
-    if (likeError) {
-      return res.status(500).json({
-        success: false,
-        message: likeError.message
-      });
-    }
-
-    await createNotification({
-      userId: video.channels.user_id,
-      actorId: user.id,
-      type: "like",
-      message:
-        `${user.email || "Someone"} liked your video: ${video.title}`,
-      videoId: video.id,
-      channelId: video.channel_id
-    });
-
-    const { count } =
-      await supabaseAdmin
-        .from("video_likes")
-        .select("*", {
-          count: "exact",
-          head: true
-        })
-        .eq("video_id", videoId);
-
-    res.json({
-      success: true,
-      liked: true,
-      likes: count || 0
-    });
-
-  } catch (err) {
-    console.error("LIKE ERROR:", err);
-
-    res.status(500).json({
-      success: false,
-      message: "Like failed"
-    });
-  }
-});
-
-
-/* =========================
-   VIDEO UNLIKE
-========================= */
-
-app.delete("/api/videos/:id/like", async (req, res) => {
-  try {
-    const user = await getUser(req);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Please login first"
-      });
-    }
-
-    const videoId = req.params.id;
-
-    const { error } =
-      await supabaseAdmin
-        .from("video_likes")
-        .delete()
-        .eq("video_id", videoId)
-        .eq("user_id", user.id);
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    const { count } =
-      await supabaseAdmin
-        .from("video_likes")
-        .select("*", {
-          count: "exact",
-          head: true
-        })
-        .eq("video_id", videoId);
-
-    res.json({
-      success: true,
-      liked: false,
-      likes: count || 0
-    });
-
-  } catch (err) {
-    console.error("UNLIKE ERROR:", err);
-
-    res.status(500).json({
-      success: false,
-      message: "Unlike failed"
-    });
-  }
-});
-
-
-/* =========================
-   VIDEO COMMENTS
-========================= */
-
-app.get("/api/videos/:id/comments", async (req, res) => {
-  try {
-    const { data, error } =
-      await supabaseAdmin
-        .from("video_comments")
-        .select(`
-          id,
-          video_id,
-          user_id,
-          content,
-          created_at
-        `)
-        .eq("video_id", req.params.id)
-        .order("created_at", {
-          ascending: false
-        });
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true,
-      comments: data || []
-    });
-
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Could not load comments"
-    });
-  }
-});
-
-
-app.post("/api/videos/:id/comments", async (req, res) => {
-  try {
-    const user = await getUser(req);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Please login first"
-      });
-    }
-
-    const content =
-      String(req.body.content || "").trim();
-
-    if (!content) {
-      return res.status(400).json({
-        success: false,
-        message: "Comment cannot be empty"
-      });
-    }
-
-    if (content.length > 2000) {
-      return res.status(400).json({
-        success: false,
-        message: "Comment is too long"
-      });
-    }
-
-    const videoId = req.params.id;
-
-    const { data: video, error: videoError } =
-      await supabaseAdmin
-        .from("videos")
-        .select(`
-          id,
-          title,
-          channel_id,
-          channels (
-            user_id,
-            name
-          )
-        `)
-        .eq("id", videoId)
-        .maybeSingle();
-
-    if (videoError || !video) {
-      return res.status(404).json({
-        success: false,
-        message: "Video not found"
-      });
-    }
-
-    const { data: comment, error } =
-      await supabaseAdmin
-        .from("video_comments")
-        .insert({
-          video_id: videoId,
-          user_id: user.id,
-          content
-        })
-        .select()
-        .single();
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    await createNotification({
-      userId: video.channels.user_id,
-      actorId: user.id,
-      type: "comment",
-      message:
-        `${user.email || "Someone"} commented on your video: ${video.title}`,
-      videoId: video.id,
-      channelId: video.channel_id
-    });
-
-    res.json({
-      success: true,
-      comment
-    });
-
-  } catch (err) {
-    console.error("COMMENT ERROR:", err);
-
-    res.status(500).json({
-      success: false,
-      message: "Comment failed"
-    });
-  }
-});
-
-
-/* =========================
-   NOTIFICATIONS
-========================= */
-
-app.get("/api/notifications", async (req, res) => {
-  try {
-    const user = await getUser(req);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Please login first"
-      });
-    }
-
-    const { data, error } =
-      await supabaseAdmin
-        .from("notifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", {
-          ascending: false
-        })
-        .limit(100);
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    const unread =
-      (data || []).filter(
-        item => !item.is_read
-      ).length;
-
-    res.json({
-      success: true,
-      notifications: data || [],
-      unread
-    });
-
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Could not load notifications"
-    });
-  }
-});
-
-
-app.post("/api/notifications/read", async (req, res) => {
-  try {
-    const user = await getUser(req);
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Please login first"
-      });
-    }
-
-    const { error } =
-      await supabaseAdmin
-        .from("notifications")
-        .update({
-          is_read: true
-        })
-        .eq("user_id", user.id)
-        .eq("is_read", false);
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true
-    });
-
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Could not mark notifications as read"
-    });
-  }
-});
 
 
 /* =========================

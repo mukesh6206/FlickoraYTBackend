@@ -167,14 +167,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
   updateAccountUI();
 
-  await initGoogleAuth();
-
   await restoreAccount();
 
   await loadVideos();
-
-  setupNotifications();
-  await loadNotifications();
 
 });
 
@@ -320,232 +315,12 @@ function updateAccountUI() {
 
 
 /* =========================================================
-   GOOGLE ONLY AUTH
-========================================================= */
-
-let supabaseClient = null;
-
-async function initGoogleAuth() {
-
-  try {
-
-    const response = await fetch("/api/public-config");
-    const config = await response.json();
-
-    if (
-      !config.success ||
-      !config.supabaseUrl ||
-      !config.supabaseAnonKey
-    ) {
-      console.error("Supabase public config missing");
-      return;
-    }
-
-    supabaseClient =
-      window.supabase.createClient(
-        config.supabaseUrl,
-        config.supabaseAnonKey
-      );
-
-    const {
-      data: { session }
-    } = await supabaseClient.auth.getSession();
-
-    if (session && session.access_token) {
-      await syncGoogleSession(session);
-    }
-
-    supabaseClient.auth.onAuthStateChange(
-      function(event, session) {
-
-        setTimeout(async function() {
-
-          if (
-            session &&
-            session.access_token
-          ) {
-
-            await syncGoogleSession(session);
-
-          }
-          else if (event === "SIGNED_OUT") {
-
-            clearSession();
-            updateAccountUI();
-
-          }
-
-        }, 0);
-
-      }
-    );
-
-  }
-  catch (error) {
-
-    console.error(
-      "Google Auth Init Error:",
-      error
-    );
-
-  }
-
-}
-
-
-async function syncGoogleSession(session) {
-
-  try {
-
-    localStorage.setItem(
-      "flickora_token",
-      session.access_token
-    );
-
-    const data =
-      await apiFetch("/api/me");
-
-    if (!data.success) {
-      throw new Error(
-        "Account verification failed"
-      );
-    }
-
-    saveSession({
-      session: session,
-      user: data.user,
-      profile: data.profile,
-      channel: data.channel
-    });
-
-    updateAccountUI();
-
-  }
-  catch (error) {
-
-    console.error(
-      "Google session sync:",
-      error.message
-    );
-
-    clearSession();
-
-  }
-
-}
-
-
-/* =========================================================
-   ACCOUNT BUTTON
-========================================================= */
-
-function createAccountButton() {
-
-  const header =
-    document.querySelector(".header");
-
-  if (!header) return;
-
-  if (
-    document.getElementById(
-      "accountButton"
-    )
-  ) {
-    return;
-  }
-
-  const button =
-    document.createElement("button");
-
-  button.id = "accountButton";
-  button.className = "headerIcon";
-  button.type = "button";
-
-  button.innerHTML = `
-    <span
-      id="accountLetter"
-      style="
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        width:32px;
-        height:32px;
-        border-radius:50%;
-        background:#6d28d9;
-        color:white;
-        font-weight:700;
-      "
-    >F</span>
-  `;
-
-  button.addEventListener(
-    "click",
-    openAccount
-  );
-
-  header.appendChild(button);
-
-}
-
-
-function updateAccountUI() {
-
-  const letter =
-    document.getElementById(
-      "accountLetter"
-    );
-
-  if (!letter) return;
-
-  if (
-    currentProfile &&
-    currentProfile.username
-  ) {
-
-    letter.textContent =
-      currentProfile.username
-        .charAt(0)
-        .toUpperCase();
-
-  }
-  else {
-
-    letter.textContent = "F";
-
-  }
-
-  const bottomAvatar =
-    document.getElementById(
-      "bottomAvatar"
-    );
-
-  if (
-    bottomAvatar &&
-    currentProfile &&
-    currentProfile.username
-  ) {
-
-    bottomAvatar.textContent =
-      currentProfile.username
-        .charAt(0)
-        .toUpperCase();
-
-  }
-
-}
-
-
-/* =========================================================
-   GOOGLE LOGIN OVERLAY
+   AUTH OVERLAY
 ========================================================= */
 
 function createAuthOverlay() {
 
-  if (
-    document.getElementById(
-      "authOverlay"
-    )
-  ) {
+  if (document.getElementById("authOverlay")) {
     return;
   }
 
@@ -572,11 +347,10 @@ function createAuthOverlay() {
       background:#111827;
       color:white;
       border-radius:18px;
-      padding:28px;
+      padding:24px;
       box-sizing:border-box;
       position:relative;
       box-shadow:0 20px 60px rgba(0,0,0,.5);
-      text-align:center;
     ">
 
       <button
@@ -591,79 +365,98 @@ function createAuthOverlay() {
           color:white;
           font-size:30px;
           cursor:pointer;
-        "
-      >×</button>
+        ">×</button>
 
-      <div style="
-        width:62px;
-        height:62px;
-        margin:5px auto 16px;
-        border-radius:50%;
-        background:white;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-size:30px;
-        font-weight:800;
-        color:#4285F4;
-      ">G</div>
-
-      <h2 style="margin:0 0 8px;">
-        Add account
+      <h2 id="authTitle"
+        style="margin:0 0 18px">
+        Login to Flickora
       </h2>
 
-      <p style="
-        margin:0 0 22px;
-        color:#9ca3af;
-        font-size:14px;
-      ">
-        Sign in to Flickora with your Google account
-      </p>
+      <input
+        id="authUsername"
+        placeholder="Username"
+        style="
+          display:none;
+          width:100%;
+          box-sizing:border-box;
+          padding:13px;
+          margin-bottom:12px;
+          border-radius:10px;
+          border:1px solid #374151;
+          background:#1f2937;
+          color:white;
+        ">
+
+      <input
+        id="authEmail"
+        type="email"
+        placeholder="Email"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:13px;
+          margin-bottom:12px;
+          border-radius:10px;
+          border:1px solid #374151;
+          background:#1f2937;
+          color:white;
+        ">
+
+      <input
+        id="authPassword"
+        type="password"
+        placeholder="Password"
+        style="
+          width:100%;
+          box-sizing:border-box;
+          padding:13px;
+          margin-bottom:12px;
+          border-radius:10px;
+          border:1px solid #374151;
+          background:#1f2937;
+          color:white;
+        ">
 
       <button
-        id="googleLoginButton"
+        id="authSubmit"
         type="button"
         style="
           width:100%;
-          padding:14px;
+          padding:13px;
           border:0;
           border-radius:10px;
-          background:white;
-          color:#111827;
-          font-size:15px;
+          background:#7c3aed;
+          color:white;
           font-weight:700;
           cursor:pointer;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          gap:10px;
-        "
-      >
-        <span style="
-          font-size:20px;
-          font-weight:800;
-          color:#4285F4;
-        ">G</span>
-
-        Continue with Google
+        ">
+        Login
       </button>
 
-      <p
-        id="authStatus"
+      <p id="authStatus"
         style="
           min-height:20px;
-          font-size:13px;
-          margin:14px 0 0;
+          font-size:14px;
+          margin:12px 0;
+        "></p>
+
+      <button
+        id="authSwitch"
+        type="button"
+        style="
+          width:100%;
+          border:0;
+          background:none;
           color:#a78bfa;
-        "
-      ></p>
+          cursor:pointer;
+        ">
+        Create new account
+      </button>
 
     </div>
   `;
 
-  document.body.appendChild(
-    overlay
-  );
+  document.body.appendChild(overlay);
 
   document
     .getElementById("authClose")
@@ -673,13 +466,23 @@ function createAuthOverlay() {
     );
 
   document
-    .getElementById("googleLoginButton")
+    .getElementById("authSubmit")
     .addEventListener(
       "click",
-      signInWithGoogle
+      submitAuth
+    );
+
+  document
+    .getElementById("authSwitch")
+    .addEventListener(
+      "click",
+      switchAuthMode
     );
 
 }
+
+
+let authMode = "login";
 
 
 function openAccount() {
@@ -694,14 +497,12 @@ function openAccount() {
 
   }
 
-  const overlay =
-    document.getElementById(
-      "authOverlay"
-    );
+  authMode = "login";
 
-  if (overlay) {
-    overlay.style.display = "flex";
-  }
+  updateAuthMode();
+
+  document.getElementById("authOverlay")
+    .style.display = "flex";
 
 }
 
@@ -709,9 +510,7 @@ function openAccount() {
 function closeAccount() {
 
   const overlay =
-    document.getElementById(
-      "authOverlay"
-    );
+    document.getElementById("authOverlay");
 
   if (overlay) {
     overlay.style.display = "none";
@@ -720,108 +519,177 @@ function closeAccount() {
 }
 
 
-async function signInWithGoogle() {
+function switchAuthMode() {
 
-  const status =
-    document.getElementById(
-      "authStatus"
-    );
+  authMode =
+    authMode === "login"
+      ? "register"
+      : "login";
 
-  if (!supabaseClient) {
+  updateAuthMode();
 
-    if (status) {
-      status.textContent =
-        "Google login loading...";
-    }
+}
 
-    await initGoogleAuth();
 
-  }
+function updateAuthMode() {
 
-  if (!supabaseClient) {
+  const title =
+    document.getElementById("authTitle");
 
-    if (status) {
-      status.textContent =
-        "Google login is not configured.";
-    }
+  const username =
+    document.getElementById("authUsername");
 
-    return;
+  const submit =
+    document.getElementById("authSubmit");
 
-  }
+  const switchButton =
+    document.getElementById("authSwitch");
 
-  if (status) {
-    status.textContent =
-      "Opening Google...";
-  }
+  if (!title) return;
 
-  try {
+  if (authMode === "register") {
 
-    const result =
-      await supabaseClient.auth.signInWithOAuth({
+    title.textContent =
+      "Create your Flickora account";
 
-        provider: "google",
+    username.style.display = "block";
 
-        options: {
-          redirectTo:
-            window.location.origin,
+    submit.textContent =
+      "Create Account";
 
-          queryParams: {
-            prompt: "select_account"
-          }
-        }
-
-      });
-
-    if (result.error) {
-      throw result.error;
-    }
+    switchButton.textContent =
+      "Already have an account? Login";
 
   }
-  catch (error) {
+  else {
 
-    console.error(
-      "Google login error:",
-      error
-    );
+    title.textContent =
+      "Login to Flickora";
 
-    if (status) {
-      status.textContent =
-        error.message ||
-        "Google login failed.";
-    }
+    username.style.display = "none";
+
+    submit.textContent =
+      "Login";
+
+    switchButton.textContent =
+      "Create new account";
 
   }
 
 }
 
 
-/* =========================================================
-   GOOGLE LOGOUT
-========================================================= */
+async function submitAuth() {
 
-async function logoutGoogle() {
+  const email =
+    document.getElementById("authEmail")
+      .value.trim();
+
+  const password =
+    document.getElementById("authPassword")
+      .value;
+
+  const username =
+    document.getElementById("authUsername")
+      .value.trim();
+
+  const status =
+    document.getElementById("authStatus");
+
+  if (!email || !password) {
+
+    status.textContent =
+      "Email आणि password भरा.";
+
+    return;
+
+  }
+
+  if (
+    authMode === "register" &&
+    username.length < 3
+  ) {
+
+    status.textContent =
+      "Username किमान 3 characters असावा.";
+
+    return;
+
+  }
+
+  status.textContent =
+    "Please wait...";
 
   try {
 
-    if (supabaseClient) {
-      await supabaseClient.auth.signOut();
+    let data;
+
+    if (authMode === "register") {
+
+      data =
+        await apiFetch(
+          "/api/auth/register",
+          {
+            method:"POST",
+            body:JSON.stringify({
+              email,
+              password,
+              username
+            })
+          }
+        );
+
     }
+    else {
+
+      data =
+        await apiFetch(
+          "/api/auth/login",
+          {
+            method:"POST",
+            body:JSON.stringify({
+              email,
+              password
+            })
+          }
+        );
+
+    }
+
+    if (!data.success) {
+      throw new Error(
+        data.message || "Authentication failed"
+      );
+    }
+
+    saveSession(data);
+
+    status.textContent =
+      "✓ Success";
+
+    updateAccountUI();
+
+    await loadVideos();
+
+    setTimeout(function(){
+
+      closeAccount();
+
+      if (currentChannel) {
+        openChannel();
+      }
+
+    },500);
 
   }
   catch (error) {
 
-    console.error(
-      "Logout error:",
-      error
-    );
+    console.error(error);
+
+    status.textContent =
+      error.message || "Something went wrong.";
 
   }
-
-  clearSession();
-
-  updateAccountUI();
-
-  await loadVideos();
 
 }
 
@@ -5234,367 +5102,3 @@ document.addEventListener("click", function(e) {
     });
   }
 });
-
-
-/* =========================================================
-   NOTIFICATIONS
-========================================================= */
-
-let flickoraNotifications = [];
-let flickoraNotificationFilter = "all";
-
-
-async function loadNotifications() {
-
-  if (!getToken()) {
-    updateNotificationBadge(0);
-    return;
-  }
-
-  try {
-
-    const data =
-      await apiFetch("/api/notifications");
-
-    if (!data || !data.success) {
-      return;
-    }
-
-    flickoraNotifications =
-      data.notifications || [];
-
-    updateNotificationBadge(
-      data.unread || 0
-    );
-
-    renderNotifications();
-
-  }
-  catch(error) {
-
-    console.log(
-      "Notifications:",
-      error.message
-    );
-
-  }
-
-}
-
-
-function updateNotificationBadge(count) {
-
-  const badge =
-    document.getElementById(
-      "notificationBadge"
-    );
-
-  if (!badge) return;
-
-  if (!count || count <= 0) {
-
-    badge.style.display = "none";
-    badge.textContent = "0";
-
-    return;
-  }
-
-  badge.style.display = "block";
-
-  badge.textContent =
-    count > 99
-      ? "99+"
-      : String(count);
-
-}
-
-
-function notificationIcon(type) {
-
-  if (type === "comment") return "💬";
-  if (type === "like") return "👍";
-  if (type === "subscribe") return "🔔";
-  if (type === "new_video") return "▶";
-
-  return "🔔";
-
-}
-
-
-function notificationTime(date) {
-
-  const time =
-    new Date(date).getTime();
-
-  if (!Number.isFinite(time)) {
-    return "";
-  }
-
-  const seconds =
-    Math.max(
-      0,
-      Math.floor(
-        (Date.now() - time) / 1000
-      )
-    );
-
-  if (seconds < 60) {
-    return "Just now";
-  }
-
-  const minutes =
-    Math.floor(seconds / 60);
-
-  if (minutes < 60) {
-    return minutes + "m ago";
-  }
-
-  const hours =
-    Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return hours + "h ago";
-  }
-
-  const days =
-    Math.floor(hours / 24);
-
-  return days + "d ago";
-
-}
-
-
-function renderNotifications() {
-
-  const list =
-    document.getElementById(
-      "notificationList"
-    );
-
-  if (!list) return;
-
-  let items =
-    flickoraNotifications.slice();
-
-  if (flickoraNotificationFilter !== "all") {
-
-    items =
-      items.filter(function(item){
-
-        return item.type ===
-          flickoraNotificationFilter;
-
-      });
-
-  }
-
-  if (!items.length) {
-
-    list.innerHTML =
-      `<div class="notificationEmpty">
-        No notifications yet
-      </div>`;
-
-    return;
-  }
-
-  list.innerHTML =
-    items.map(function(item){
-
-      return `
-        <div
-          class="flickoraNotification ${
-            item.is_read ? "" : "unread"
-          }"
-          data-video-id="${
-            escapeAttr(item.video_id || "")
-          }">
-
-          <div class="notificationIcon">
-            ${notificationIcon(item.type)}
-          </div>
-
-          <div class="notificationText">
-
-            <div>
-              ${escapeHTML(
-                item.message || "New notification"
-              )}
-            </div>
-
-            <div class="notificationTime">
-              ${notificationTime(item.created_at)}
-            </div>
-
-          </div>
-
-        </div>
-      `;
-
-    }).join("");
-
-}
-
-
-function openNotifications() {
-
-  const overlay =
-    document.getElementById(
-      "notificationOverlay"
-    );
-
-  if (!overlay) return;
-
-  overlay.classList.add("show");
-
-  loadNotifications();
-
-}
-
-
-function closeNotifications() {
-
-  const overlay =
-    document.getElementById(
-      "notificationOverlay"
-    );
-
-  if (!overlay) return;
-
-  overlay.classList.remove("show");
-
-}
-
-
-async function markNotificationsRead() {
-
-  if (!getToken()) return;
-
-  try {
-
-    await apiFetch(
-      "/api/notifications/read",
-      {
-        method:"POST"
-      }
-    );
-
-    flickoraNotifications =
-      flickoraNotifications.map(
-        function(item){
-          return {
-            ...item,
-            is_read:true
-          };
-        }
-      );
-
-    updateNotificationBadge(0);
-
-    renderNotifications();
-
-  }
-  catch(error) {
-
-    console.log(
-      "Notification read:",
-      error.message
-    );
-
-  }
-
-}
-
-
-function setupNotifications() {
-
-  const button =
-    document.getElementById(
-      "notificationButton"
-    );
-
-  const close =
-    document.getElementById(
-      "closeNotificationButton"
-    );
-
-  const overlay =
-    document.getElementById(
-      "notificationOverlay"
-    );
-
-  if (button) {
-
-    button.addEventListener(
-      "click",
-      function(e){
-
-        e.stopPropagation();
-
-        openNotifications();
-
-      }
-    );
-
-  }
-
-  if (close) {
-
-    close.addEventListener(
-      "click",
-      closeNotifications
-    );
-
-  }
-
-  if (overlay) {
-
-    overlay.addEventListener(
-      "click",
-      function(e){
-
-        if (e.target === overlay) {
-          closeNotifications();
-        }
-
-      }
-    );
-
-  }
-
-  document
-    .querySelectorAll(".notificationTab")
-    .forEach(function(tab){
-
-      tab.addEventListener(
-        "click",
-        function(){
-
-          document
-            .querySelectorAll(
-              ".notificationTab"
-            )
-            .forEach(function(item){
-              item.classList.remove("active");
-            });
-
-          tab.classList.add("active");
-
-          flickoraNotificationFilter =
-            tab.dataset.type || "all";
-
-          renderNotifications();
-
-        }
-      );
-
-    });
-
-}
-
-
-setInterval(
-  loadNotifications,
-  30000
-);
-
