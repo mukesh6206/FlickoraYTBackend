@@ -146,28 +146,46 @@ app.use(express.urlencoded({
 const securityEvents = [];
 const MAX_SECURITY_EVENTS = 200;
 
-function recordSecurityEvent(req, status, reason) {
+async function recordSecurityEvent(req, status, reason) {
   if (![401, 403, 429, 500].includes(status)) return;
 
-  securityEvents.unshift({
+  const event = {
     time: new Date().toISOString(),
     ip: clientIP(req),
     method: req.method,
     path: req.originalUrl,
     status,
     reason
-  });
+  };
+
+  securityEvents.unshift(event);
 
   if (securityEvents.length > MAX_SECURITY_EVENTS) {
     securityEvents.pop();
+  }
+
+  try {
+    await supabaseAdmin
+      .from("security_events")
+      .insert({
+        created_at: event.time,
+        ip: event.ip,
+        method: event.method,
+        path: event.path,
+        status: event.status,
+        reason: event.reason
+      });
+  } catch (error) {
+    console.error(
+      "SECURITY LOG SAVE ERROR:",
+      error.message
+    );
   }
 }
 
 app.use((req, res, next) => {
   res.on("finish", () => {
-    recordSecurityEvent(
-      req,
-      res.statusCode,
+    const reason =
       res.statusCode === 401
         ? "Unauthorized request"
         : res.statusCode === 403
@@ -176,14 +194,19 @@ app.use((req, res, next) => {
             ? "Rate limit / blocked request"
             : res.statusCode === 500
               ? "Server error"
-              : ""
-    );
+              : "";
+
+    recordSecurityEvent(
+      req,
+      res.statusCode,
+      reason
+    ).catch(() => {});
   });
 
   next();
 });
 
-app.get("/api/security/events", (req, res) => {
+app.get("/api/security/events", async (req, res) => {
   const monitorKey =
     process.env.SECURITY_MONITOR_KEY || "";
 
@@ -200,13 +223,59 @@ app.get("/api/security/events", (req, res) => {
     });
   }
 
-  res.json({
-    success: true,
-    count: securityEvents.length,
-    events: securityEvents
-  });
-});
+  try {
+    const { data, error } =
+      await supabaseAdmin
+        .from("security_events")
+        .select(
+          "id, created_at, ip, method, path, status, reason"
+        )
+        .order("created_at", {
+          ascending: false
+        })
+        .limit(MAX_SECURITY_EVENTS);
 
+    if (error) {
+      console.error(
+        "SECURITY LOG READ ERROR:",
+        error.message
+      );
+
+      return res.json({
+        success: true,
+        count: securityEvents.length,
+        events: securityEvents
+      });
+    }
+
+    const events = (data || []).map(event => ({
+      time: event.created_at,
+      ip: event.ip,
+      method: event.method,
+      path: event.path,
+      status: event.status,
+      reason: event.reason
+    }));
+
+    res.json({
+      success: true,
+      count: events.length,
+      events
+    });
+
+  } catch (error) {
+    console.error(
+      "SECURITY MONITOR ERROR:",
+      error.message
+    );
+
+    res.json({
+      success: true,
+      count: securityEvents.length,
+      events: securityEvents
+    });
+  }
+});
 
 const blockedIPs = new Map();
 const BLOCK_TIME = 15 * 60 * 1000;
