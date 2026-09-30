@@ -2846,7 +2846,7 @@ app.delete("/api/videos/:id/like", async (req, res) => {
 
 app.get("/api/videos/:id/comments", async (req, res) => {
   try {
-    const { data, error } =
+    const { data: comments, error } =
       await supabaseAdmin
         .from("video_comments")
         .select(`
@@ -2857,9 +2857,7 @@ app.get("/api/videos/:id/comments", async (req, res) => {
           created_at
         `)
         .eq("video_id", req.params.id)
-        .order("created_at", {
-          ascending: false
-        });
+        .order("created_at", { ascending: false });
 
     if (error) {
       return res.status(500).json({
@@ -2868,19 +2866,49 @@ app.get("/api/videos/:id/comments", async (req, res) => {
       });
     }
 
+    const userIds = [
+      ...new Set((comments || []).map(c => c.user_id).filter(Boolean))
+    ];
+
+    let profiles = [];
+
+    if (userIds.length) {
+      const { data } = await supabaseAdmin
+        .from("profiles")
+        .select("id, username, avatar_url")
+        .in("id", userIds);
+
+      profiles = data || [];
+    }
+
+    const profileMap = new Map(
+      profiles.map(p => [p.id, p])
+    );
+
+    const result = (comments || []).map(comment => ({
+      ...comment,
+      username:
+        profileMap.get(comment.user_id)?.username ||
+        "Flickora User",
+      avatar_url:
+        profileMap.get(comment.user_id)?.avatar_url ||
+        ""
+    }));
+
     res.json({
       success: true,
-      comments: data || []
+      comments: result
     });
 
   } catch (err) {
+    console.error("COMMENTS GET ERROR:", err);
+
     res.status(500).json({
       success: false,
       message: "Could not load comments"
     });
   }
 });
-
 
 app.post("/api/videos/:id/comments", async (req, res) => {
   try {

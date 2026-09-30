@@ -733,41 +733,222 @@
 
   if(!preview || !sheet) return;
 
+  function escapeHtml(value){
+    return String(value || "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+
+  function commentAvatarHtml(comment){
+    const name =
+      comment.username ||
+      "Flickora User";
+
+    const letter =
+      name.trim().charAt(0).toUpperCase() || "F";
+
+    if(comment.avatar_url){
+      return `
+        <img
+          class="commentAvatar"
+          src="${escapeHtml(comment.avatar_url)}"
+          alt="${escapeHtml(name)}"
+          style="object-fit:cover;"
+        >
+      `;
+    }
+
+    return `
+      <div class="commentAvatar">
+        ${escapeHtml(letter)}
+      </div>
+    `;
+  }
+
+  function renderComments(comments){
+
+    const list =
+      sheet.querySelector(".flickoraCommentsList");
+
+    if(!list) return;
+
+    list.innerHTML = "";
+
+    if(!comments || !comments.length){
+      list.innerHTML =
+        '<div style="padding:20px;text-align:center;color:#777;">No comments yet</div>';
+
+      return;
+    }
+
+    comments.forEach(function(comment){
+
+      const item =
+        document.createElement("div");
+
+      item.className =
+        "flickoraSheetComment";
+
+      item.innerHTML = `
+        ${commentAvatarHtml(comment)}
+
+        <div class="flickoraSheetCommentText">
+          <b>${escapeHtml(comment.username || "Flickora User")}</b>
+
+          <p>${escapeHtml(comment.content || "")}</p>
+
+          <div class="flickoraCommentActions">
+            ♡ 0 &nbsp;&nbsp; 💬 Reply
+          </div>
+        </div>
+
+        <span>•••</span>
+      `;
+
+      list.appendChild(item);
+    });
+
+    const count =
+      document.getElementById("sheetCommentCount");
+
+    const previewCount =
+      document.getElementById("commentCount");
+
+    if(count){
+      count.textContent = comments.length;
+    }
+
+    if(previewCount){
+      previewCount.textContent = comments.length;
+    }
+  }
+
+  async function loadComments(){
+
+    if(!window.currentVideo || !window.currentVideo.id){
+      return;
+    }
+
+    try{
+
+      const response =
+        await fetch(
+          "/api/videos/" +
+          encodeURIComponent(window.currentVideo.id) +
+          "/comments"
+        );
+
+      const data =
+        await response.json();
+
+      if(data.success){
+        renderComments(data.comments || []);
+      }
+
+    }catch(error){
+      console.error("Comments load error:", error);
+    }
+  }
+
   preview.addEventListener("click", function(){
+
     sheet.classList.add("show");
+
+    loadComments();
   });
 
-  closeBtn.addEventListener("click", function(){
-    sheet.classList.remove("show");
-  });
+  if(closeBtn){
 
-  send.addEventListener("click", function(){
-    const text = input.value.trim();
+    closeBtn.addEventListener("click", function(){
+
+      sheet.classList.remove("show");
+
+    });
+
+  }
+
+  send.addEventListener("click", async function(){
+
+    const text =
+      input.value.trim();
 
     if(!text) return;
 
-    const list = sheet.querySelector(".flickoraCommentsList");
+    if(!window.currentVideo || !window.currentVideo.id){
 
-    const item = document.createElement("div");
-    item.className = "flickoraSheetComment";
+      alert("Video open नाही.");
 
-    item.innerHTML = `
-      <div class="commentAvatar">F</div>
-      <div class="flickoraSheetCommentText">
-        <b>Flickora User</b>
-        <p></p>
-        <div class="flickoraCommentActions">
-          ♡ 0 &nbsp;&nbsp; 💬 Reply
-        </div>
-      </div>
-      <span>•••</span>
-    `;
+      return;
+    }
 
-    item.querySelector("p").textContent = text;
+    const token =
+      localStorage.getItem("flickora_token") || "";
 
-    list.prepend(item);
+    if(!token){
 
-    input.value = "";
+      alert("Comment करण्यासाठी login करा.");
+
+      return;
+    }
+
+    send.disabled = true;
+
+    try{
+
+      const response =
+        await fetch(
+          "/api/videos/" +
+          encodeURIComponent(window.currentVideo.id) +
+          "/comments",
+          {
+            method:"POST",
+
+            headers:{
+              "Content-Type":"application/json",
+              "Authorization":"Bearer " + token
+            },
+
+            body:JSON.stringify({
+              content:text
+            })
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if(!data.success){
+
+        alert(
+          data.message ||
+          "Comment failed"
+        );
+
+        return;
+      }
+
+      input.value = "";
+
+      await loadComments();
+
+    }catch(error){
+
+      console.error(
+        "Comment send error:",
+        error
+      );
+
+      alert("Comment failed.");
+
+    }finally{
+
+      send.disabled = false;
+
+    }
+
   });
 
 })();

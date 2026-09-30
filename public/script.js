@@ -7,7 +7,8 @@ const API_BASE = "";
 let currentUser = null;
 let currentProfile = null;
 let currentChannel = null;
-let currentVideo = null;
+var currentVideo = null;
+window.currentVideo = null;
 let currentVideos = [];
 let currentVideoIndex = -1;
 
@@ -2309,6 +2310,7 @@ function openPlayer(video) {
   }
 
   currentVideo = video;
+  window.currentVideo = video;
 
   currentVideoIndex =
     currentVideos.findIndex(function(item){
