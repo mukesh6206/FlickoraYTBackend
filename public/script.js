@@ -285,36 +285,54 @@ function updateAccountUI() {
   const letter =
     document.getElementById("accountLetter");
 
-  if (!letter) return;
-
-  if (currentProfile && currentProfile.username) {
-
-    letter.textContent =
-      currentProfile.username
-        .charAt(0)
-        .toUpperCase();
-
-  }
-  else {
-
-    letter.textContent = "F";
-
-  }
-
   const bottomAvatar =
     document.getElementById("bottomAvatar");
 
-  if (
-    bottomAvatar &&
+  const photo =
+    (currentProfile && currentProfile.avatar_url) ||
+    (currentChannel && currentChannel.avatar_url);
+
+  const fallback =
     currentProfile &&
     currentProfile.username
-  ) {
+      ? currentProfile.username.charAt(0).toUpperCase()
+      : "F";
 
-    bottomAvatar.textContent =
-      currentProfile.username
-        .charAt(0)
-        .toUpperCase();
+  if (letter) {
 
+    if (photo) {
+
+      letter.innerHTML =
+        '<img src="' +
+        escapeAttr(photo) +
+        '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+
+      letter.style.background = "transparent";
+      letter.style.overflow = "hidden";
+
+    } else {
+
+      letter.textContent = fallback;
+
+    }
+  }
+
+  if (bottomAvatar) {
+
+    if (photo) {
+
+      bottomAvatar.innerHTML =
+        '<img src="' +
+        escapeAttr(photo) +
+        '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+
+      bottomAvatar.style.overflow = "hidden";
+
+    } else {
+
+      bottomAvatar.textContent = fallback;
+
+    }
   }
 
 }
@@ -492,45 +510,56 @@ function createAccountButton() {
 function updateAccountUI() {
 
   const letter =
-    document.getElementById(
-      "accountLetter"
-    );
-
-  if (!letter) return;
-
-  if (
-    currentProfile &&
-    currentProfile.username
-  ) {
-
-    letter.textContent =
-      currentProfile.username
-        .charAt(0)
-        .toUpperCase();
-
-  }
-  else {
-
-    letter.textContent = "F";
-
-  }
+    document.getElementById("accountLetter");
 
   const bottomAvatar =
-    document.getElementById(
-      "bottomAvatar"
-    );
+    document.getElementById("bottomAvatar");
 
-  if (
-    bottomAvatar &&
+  const photo =
+    (currentProfile && currentProfile.avatar_url) ||
+    (currentChannel && currentChannel.avatar_url);
+
+  const fallback =
     currentProfile &&
     currentProfile.username
-  ) {
+      ? currentProfile.username.charAt(0).toUpperCase()
+      : "F";
 
-    bottomAvatar.textContent =
-      currentProfile.username
-        .charAt(0)
-        .toUpperCase();
+  if (letter) {
 
+    if (photo) {
+
+      letter.innerHTML =
+        '<img src="' +
+        escapeAttr(photo) +
+        '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+
+      letter.style.background = "transparent";
+      letter.style.overflow = "hidden";
+
+    } else {
+
+      letter.textContent = fallback;
+
+    }
+  }
+
+  if (bottomAvatar) {
+
+    if (photo) {
+
+      bottomAvatar.innerHTML =
+        '<img src="' +
+        escapeAttr(photo) +
+        '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+
+      bottomAvatar.style.overflow = "hidden";
+
+    } else {
+
+      bottomAvatar.textContent = fallback;
+
+    }
   }
 
 }
