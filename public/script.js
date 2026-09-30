@@ -992,6 +992,10 @@ function showHome() {
 
   setActiveNav(0);
 
+  /* Search filter काढून पूर्ण Home videos परत दाखवा */
+  renderVideos(currentVideos);
+  renderShorts(currentVideos);
+
   window.scrollTo(0,0);
 
 }
@@ -5726,4 +5730,92 @@ setInterval(
   loadNotifications,
   30000
 );
+
+
+
+
+
+document.addEventListener("DOMContentLoaded", function () {
+
+  const searchButton =
+    document.getElementById("searchButton");
+
+  const searchBox =
+    document.getElementById("searchBoxOverlay");
+
+  const searchInput =
+    document.getElementById("searchInput");
+
+  const closeSearch =
+    document.getElementById("closeSearchBox");
+
+  if (!searchButton || !searchBox || !searchInput) {
+    return;
+  }
+
+  searchButton.addEventListener("click", function () {
+
+    searchBox.style.display = "flex";
+
+    setTimeout(function () {
+      searchInput.focus();
+    }, 100);
+
+  });
+
+  if (closeSearch) {
+    closeSearch.addEventListener("click", function () {
+      searchBox.style.display = "none";
+      searchInput.value = "";
+    });
+  }
+
+});
+
+
+document.addEventListener("DOMContentLoaded", function () {
+
+  const input = document.getElementById("searchInput");
+  const submit = document.getElementById("searchSubmit");
+
+  if (!input) return;
+
+  function doFlickoraSearch() {
+
+    const query = input.value.trim().toLowerCase();
+
+    if (!query) {
+      renderVideos(currentVideos);
+      renderShorts(currentVideos);
+      return;
+    }
+
+    const results = currentVideos.filter(function (video) {
+
+      const text = [
+        video.title || "",
+        video.description || "",
+        video.hashtags || "",
+        video.category || ""
+      ].join(" ").toLowerCase();
+
+      return text.includes(query);
+    });
+
+    renderVideos(results);
+    renderShorts(results);
+  }
+
+  if (submit) {
+    submit.addEventListener("click", doFlickoraSearch);
+  }
+
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doFlickoraSearch();
+    }
+  });
+
+});
 
