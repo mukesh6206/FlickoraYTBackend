@@ -2363,6 +2363,16 @@ function openPlayer(video) {
 
   player.load();
 
+  const channelOverlay =
+    document.getElementById("channelOverlay");
+
+  if (
+    channelOverlay &&
+    channelOverlay.style.display === "block"
+  ) {
+    overlay.style.zIndex = "100000";
+  }
+
   overlay.classList.add("show");
 
   updatePlayerInfo(video);
@@ -3828,13 +3838,6 @@ function openMyVideoMenu(
 
   if (old) {
     old.remove();
-  }
-
-  const oldMenu =
-    document.getElementById("myVideoMenu");
-
-  if (oldMenu) {
-    oldMenu.remove();
     return;
   }
 
