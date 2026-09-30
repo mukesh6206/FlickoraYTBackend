@@ -465,13 +465,21 @@ svg{
   aspect-ratio:16/9;
   position:sticky;
   top:55px;
-  z-index:4;
+  z-index:20;
+  overflow:hidden;
 }
 
 .playerVideo{
   width:100%;
   height:100%;
   object-fit:contain;
+  position:relative;
+  z-index:21;
+}
+
+.recommendedSection{
+  position:relative;
+  z-index:1;
 }
 
 .playerDetails{
