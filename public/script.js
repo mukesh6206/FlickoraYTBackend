@@ -971,18 +971,12 @@ function showHome() {
   const home =
     document.getElementById("homePage");
 
-  const shorts =
-    document.getElementById("shortsPage");
 
   const subscriptions =
     document.getElementById("subscriptionsPage");
 
   if (home) {
     home.classList.add("active");
-  }
-
-  if (shorts) {
-    shorts.classList.remove("active");
   }
 
   /* Subscriptions page पूर्णपणे hide करा */
@@ -994,30 +988,6 @@ function showHome() {
 
   /* Search filter काढून पूर्ण Home videos परत दाखवा */
   renderVideos(currentVideos);
-  renderShorts(currentVideos);
-
-  window.scrollTo(0,0);
-
-}
-
-
-function showShorts() {
-
-  const home =
-    document.getElementById("homePage");
-
-  const shorts =
-    document.getElementById("shortsPage");
-
-  if (home) {
-    home.classList.remove("active");
-  }
-
-  if (shorts) {
-    shorts.classList.add("active");
-  }
-
-  setActiveNav(1);
 
   window.scrollTo(0,0);
 
@@ -1032,10 +1002,7 @@ async function showSubscriptions() {
   }
 
   const home = document.getElementById("homePage");
-  const shorts = document.getElementById("shortsPage");
-
   if (home) home.classList.remove("active");
-  if (shorts) shorts.classList.remove("active");
 
   setActiveNav(2);
   window.scrollTo(0, 0);
@@ -1880,12 +1847,7 @@ if (uploadForm) {
             form.classList.remove("show");
           }
 
-          if (type === "short") {
-            showShorts();
-          }
-          else {
-            showHome();
-          }
+          showHome();
 
         },700);
 
@@ -1936,7 +1898,6 @@ async function loadVideos() {
     let homeVideos = currentVideos.slice();
 
     renderVideos(currentVideos);
-    renderShorts(currentVideos);
 
     setTimeout(function(){
 
@@ -1953,7 +1914,6 @@ async function loadVideos() {
     );
 
     renderVideos([]);
-    renderShorts([]);
 
   }
 
@@ -2045,61 +2005,6 @@ function renderVideos(videos) {
 
 }
 
-
-/* =========================================================
-   RENDER SHORTS
-========================================================= */
-
-function renderShorts(videos) {
-
-  const list =
-    document.getElementById("shortList");
-
-  if (!list) return;
-
-  list.innerHTML = "";
-
-  const shorts =
-    videos.filter(function(video){
-
-      return video.type === "short";
-
-    });
-
-  if (!shorts.length) {
-
-    list.innerHTML = `
-      <div class="empty">
-        <h2>Shorts</h2>
-        <p>
-          ${currentUser
-            ? "Tap + → Short to upload one."
-            : "Login करून Short upload करा."}
-        </p>
-      </div>
-    `;
-
-    return;
-
-  }
-
-  shorts.forEach(function(video){
-
-    list.appendChild(
-      createVideoCard(
-        video,
-        true
-      )
-    );
-
-  });
-
-}
-
-
-/* =========================================================
-   VIDEO CARD
-========================================================= */
 
 function createVideoCard(video, isShort = false) {
 
@@ -5170,8 +5075,6 @@ if (shareButton) {
 window.showHome =
   showHome;
 
-window.showShorts =
-  showShorts;
 
 window.showSubscriptions =
   showSubscriptions;
@@ -5786,7 +5689,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (!query) {
       renderVideos(currentVideos);
-      renderShorts(currentVideos);
       return;
     }
 
@@ -5803,7 +5705,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     renderVideos(results);
-    renderShorts(results);
   }
 
   if (submit) {

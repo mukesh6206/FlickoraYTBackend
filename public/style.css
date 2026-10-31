@@ -206,10 +206,7 @@ svg{
 
 /* SHORTS */
 
-.shortsPage{
-  background:#000;
-  min-height:calc(100vh - 136px);
-}
+
 
 .shortCard{
   position:relative;
@@ -921,3 +918,114 @@ svg{
     margin:auto;
   }
 }
+
+/* COMMENTS */
+
+.shortCommentsBox {
+  position: fixed;
+  inset: 0;
+  z-index: 200000;
+  background: rgba(0,0,0,.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.shortCommentsPanel {
+  width: 100%;
+  max-width: 600px;
+  max-height: 75vh;
+  background: #fff;
+  color: #111;
+  border-radius: 22px 22px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.commentsHeader {
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  border-bottom: 1px solid #ddd;
+}
+
+.commentsHeader button {
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+}
+
+.commentsList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+
+.shortComment {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.commentAvatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  background: #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-weight: 700;
+}
+
+.commentAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shortComment p {
+  margin: 4px 0 0;
+}
+
+.noComments {
+  text-align: center;
+  color: #777;
+  padding: 35px 0;
+}
+
+.commentInputRow {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid #ddd;
+}
+
+.commentInputRow input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border: 1px solid #ccc;
+  border-radius: 22px;
+  padding: 0 15px;
+  font-size: 15px;
+  outline: none;
+}
+
+.commentInputRow button {
+  border: 0;
+  border-radius: 22px;
+  padding: 0 17px;
+  background: #111827;
+  color: #fff;
+  font-weight: 700;
+}
+
+
+
+
